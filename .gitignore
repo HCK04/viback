@@ -1,0 +1,45 @@
+# Environment files
+.env
+.env.*.local
+.env.production
+
+# Laravel storage & cache
+/storage/
+bootstrap/cache/
+
+# Composer dependencies
+/vendor/
+
+# Logs
+*.log
+logs/
+
+# Node (if any Node setup exists)
+node_modules/
+
+# Backup or database dumps
+*.sql
+*.sqlite
+*.bak
+*.backup
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# OS generated files
+Thumbs.db
+
+# Misc
+*.zip
+*.tar.gz
+*.exe
+*.pdf
+
+# Environment files
+.env
+.env.*.local
+.env.production
+.env.example
