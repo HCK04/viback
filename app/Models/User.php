@@ -17,6 +17,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'email_verified_at',
         'password',
         'phone',
         'role_id',
@@ -63,6 +64,70 @@ class User extends Authenticatable
     public function medecinProfile()
     {
         return $this->hasOne(MedecinProfile::class);
+    }
+
+    /**
+     * Get the kine profile associated with the user.
+     */
+    public function kineProfile()
+    {
+        return $this->hasOne(KineProfile::class);
+    }
+
+    /**
+     * Get the orthophoniste profile associated with the user.
+     */
+    public function orthophonisteProfile()
+    {
+        return $this->hasOne(OrthophonisteProfile::class);
+    }
+
+    /**
+     * Get the psychologue profile associated with the user.
+     */
+    public function psychologueProfile()
+    {
+        return $this->hasOne(PsychologueProfile::class);
+    }
+
+    /**
+     * Get the clinique profile associated with the user.
+     */
+    public function cliniqueProfile()
+    {
+        return $this->hasOne(CliniqueProfile::class);
+    }
+
+    /**
+     * Get the pharmacie profile associated with the user.
+     */
+    public function pharmacieProfile()
+    {
+        return $this->hasOne(PharmacieProfile::class);
+    }
+
+    /**
+     * Get the parapharmacie profile associated with the user.
+     */
+    public function parapharmacieProfile()
+    {
+        return $this->hasOne(ParapharmacieProfile::class);
+    }
+
+    /**
+     * Get the labo analyse profile associated with the user.
+     */
+    public function laboAnalyseProfile()
+    {
+        return $this->hasOne(LaboAnalyseProfile::class);
+    }
+
+    /**
+     * Get the centre radiologie profile associated with the user.
+     */
+    public function centreRadiologieProfile()
+    {
+        return $this->hasOne(CentreRadiologieProfile::class);
     }
 
     /**
@@ -128,4 +193,5 @@ class User extends Authenticatable
     {
         return $this->hasMany(Annonce::class, 'user_id');
     }
+
 }

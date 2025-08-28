@@ -38,6 +38,11 @@ Route::get('/annonces/{id}', [AnnonceController::class, 'show']);
 Route::get('/site-stats', [SiteStatsController::class, 'getStats']);
 Route::post('/site-stats/bump', [SiteStatsController::class, 'bump']);
 
+// Public search routes (no authentication required)
+Route::get('/users', [UserController::class, 'publicSearch']);
+Route::get('/medecins', [MedecinController::class, 'publicIndex']);
+Route::get('/organisations', [OrganisationController::class, 'publicIndex']);
+
 // Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
     // User info
@@ -104,10 +109,10 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Admin routes
-    Route::get('/users', [UserController::class, 'index']);
-    Route::post('/users', [UserController::class, 'store']);
-    Route::put('/users/{id}', [UserController::class, 'update']);
-    Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    Route::get('/admin/users', [UserController::class, 'index']);
+    Route::post('/admin/users', [UserController::class, 'store']);
+    Route::put('/admin/users/{id}', [UserController::class, 'update']);
+    Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
     Route::get('/roles', [UserController::class, 'roles']);
 });
 

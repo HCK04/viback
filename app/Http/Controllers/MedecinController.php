@@ -42,8 +42,8 @@ class MedecinController extends Controller
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
-                'start_time' => $profile->start_time ?? null,
-                'end_time' => $profile->end_time ?? null,
+                'horaire_start' => $profile->horaire_start ?? null,
+                'horaire_end' => $profile->horaire_end ?? null,
             ];
         }
         foreach ($kines as $profile) {
@@ -58,8 +58,8 @@ class MedecinController extends Controller
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
-                'start_time' => $profile->start_time ?? null,
-                'end_time' => $profile->end_time ?? null,
+                'horaire_start' => $profile->horaire_start ?? null,
+                'horaire_end' => $profile->horaire_end ?? null,
             ];
         }
         foreach ($orthos as $profile) {
@@ -74,8 +74,8 @@ class MedecinController extends Controller
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
-                'start_time' => $profile->start_time ?? null,
-                'end_time' => $profile->end_time ?? null,
+                'horaire_start' => $profile->horaire_start ?? null,
+                'horaire_end' => $profile->horaire_end ?? null,
             ];
         }
         foreach ($psychos as $profile) {
@@ -90,8 +90,8 @@ class MedecinController extends Controller
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
-                'start_time' => $profile->start_time ?? null,
-                'end_time' => $profile->end_time ?? null,
+                'horaire_start' => $profile->horaire_start ?? null,
+                'horaire_end' => $profile->horaire_end ?? null,
             ];
         }
 
@@ -120,7 +120,7 @@ class MedecinController extends Controller
             return response()->json(['error' => 'Profil professionnel non trouvé'], 404);
         }
 
-        // Compose response with complete profile data
+        // Compose response with complete profile data including CV fields
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
@@ -134,8 +134,21 @@ class MedecinController extends Controller
             'location' => $profile->adresse ?? null, // Add location alias
             'disponible' => $profile->disponible ?? null,
             'horaires' => $profile->horaires ?? null,
-            'start_time' => $profile->start_time ?? null,
-            'end_time' => $profile->end_time ?? null,
+            'horaire_start' => $profile->horaire_start ?? null,
+            'horaire_end' => $profile->horaire_end ?? null,
+            // CV fields
+            'presentation' => $profile->presentation ?? null,
+            'carte_professionnelle' => $profile->carte_professionnelle ?? null,
+            'diplomes' => $profile->diplomes ?? null,
+            'experiences' => $profile->experiences ?? null,
+            'additional_info' => $profile->additional_info ?? null,
+            // New profile fields
+            'moyens_paiement' => $profile->moyens_paiement ?? null,
+            'moyens_transport' => $profile->moyens_transport ?? null,
+            'informations_pratiques' => $profile->informations_pratiques ?? null,
+            'jours_disponibles' => $profile->jours_disponibles ?? null,
+            'contact_urgence' => $profile->contact_urgence ?? null,
+            'rdv_patients_suivis_uniquement' => $profile->rdv_patients_suivis_uniquement ?? false,
         ]);
     }
 

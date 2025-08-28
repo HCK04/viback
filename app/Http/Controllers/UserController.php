@@ -204,8 +204,25 @@ class UserController extends Controller
             if ($request->filled('address')) {
                 $medecinProfile->adresse = $request->address;
             }
+            if ($request->filled('ville')) {
+                $medecinProfile->ville = $request->ville;
+            }
+            if ($request->filled('presentation')) {
+                $medecinProfile->presentation = $request->presentation;
+            }
+            if ($request->filled('additional_info')) {
+                $medecinProfile->additional_info = $request->additional_info;
+            }
             
-            // Handle horaires as JSON format
+            // Handle separate time fields
+            if ($request->filled('horaire_start')) {
+                $medecinProfile->horaire_start = $request->horaire_start;
+            }
+            if ($request->filled('horaire_end')) {
+                $medecinProfile->horaire_end = $request->horaire_end;
+            }
+            
+            // Keep backward compatibility with horaires JSON
             if ($request->filled('horaire_start') && $request->filled('horaire_end')) {
                 $medecinProfile->horaires = json_encode([
                     'start' => $request->horaire_start,
@@ -254,6 +271,176 @@ class UserController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error fetching users: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to fetch users'], 500);
+        }
+    }
+
+    /**
+     * Public search for healthcare professionals (restricted to your website)
+     */
+    public function publicSearch(Request $request)
+    {
+        // Check if request is from allowed origins
+        $origin = $request->header('Origin') ?: $request->header('Referer');
+        $allowedOrigins = [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'https://your-production-domain.com'
+        ];
+        
+        if ($origin && !in_array(rtrim($origin, '/'), $allowedOrigins)) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+        
+        // Get proximity search parameters
+        $latitude = $request->query('lat');
+        $longitude = $request->query('lng');
+        $radius = $request->query('radius', 5); // Default 5km radius
+
+        try {
+            \Log::info('PublicSearch called with params:', [
+                'lat' => $latitude,
+                'lng' => $longitude,
+                'radius' => $radius,
+                'origin' => $origin
+            ]);
+
+            $users = User::with([
+                'role',
+                'medecinProfile',
+                'kineProfile', 
+                'orthophonisteProfile',
+                'psychologueProfile',
+                'cliniqueProfile',
+                'pharmacieProfile',
+                'parapharmacieProfile',
+                'laboAnalyseProfile',
+                'centreRadiologieProfile'
+            ])
+            ->whereHas('role', function($query) {
+                $query->whereNotIn('name', ['patient', 'admin']);
+            })
+            ->get();
+
+            \Log::info('Found users count:', ['count' => $users->count()]);
+
+            $processedUsers = $users->map(function($user) use ($latitude, $longitude) {
+                // Add profile data directly to user object for easier frontend access
+                $profileData = null;
+                $ville = null;
+                
+                try {
+                    if ($user->medecinProfile) {
+                        $profileData = $user->medecinProfile->toArray();
+                        // Remove sensitive data - do NOT include carte_professionnelle
+                        unset($profileData['carte_professionnelle']);
+                        
+                        // Decode JSON fields for frontend display
+                        if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
+                            $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
+                        }
+                        if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
+                            $profileData['experiences'] = json_decode($profileData['experiences'], true);
+                        }
+                        if (isset($profileData['specialty']) && is_string($profileData['specialty'])) {
+                            $profileData['specialty'] = json_decode($profileData['specialty'], true);
+                        }
+                        
+                        $ville = $user->medecinProfile->ville ?? null;
+                    } elseif ($user->kineProfile) {
+                        $profileData = $user->kineProfile->toArray();
+                        unset($profileData['carte_professionnelle']);
+                        
+                        if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
+                            $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
+                        }
+                        if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
+                            $profileData['experiences'] = json_decode($profileData['experiences'], true);
+                        }
+                        
+                        $ville = $user->kineProfile->ville ?? null;
+                    } elseif ($user->orthophonisteProfile) {
+                        $profileData = $user->orthophonisteProfile->toArray();
+                        unset($profileData['carte_professionnelle']);
+                        
+                        if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
+                            $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
+                        }
+                        if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
+                            $profileData['experiences'] = json_decode($profileData['experiences'], true);
+                        }
+                        
+                        $ville = $user->orthophonisteProfile->ville ?? null;
+                    } elseif ($user->psychologueProfile) {
+                        $profileData = $user->psychologueProfile->toArray();
+                        unset($profileData['carte_professionnelle']);
+                        
+                        if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
+                            $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
+                        }
+                        if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
+                            $profileData['experiences'] = json_decode($profileData['experiences'], true);
+                        }
+                        
+                        $ville = $user->psychologueProfile->ville ?? null;
+                    } elseif ($user->cliniqueProfile) {
+                        $profileData = $user->cliniqueProfile->toArray();
+                        $ville = $user->cliniqueProfile->ville ?? null;
+                    } elseif ($user->pharmacieProfile) {
+                        $profileData = $user->pharmacieProfile->toArray();
+                        $ville = $user->pharmacieProfile->ville ?? null;
+                    } elseif ($user->parapharmacieProfile) {
+                        $profileData = $user->parapharmacieProfile->toArray();
+                        $ville = $user->parapharmacieProfile->ville ?? null;
+                    } elseif ($user->laboAnalyseProfile) {
+                        $profileData = $user->laboAnalyseProfile->toArray();
+                        $ville = $user->laboAnalyseProfile->ville ?? null;
+                    } elseif ($user->centreRadiologieProfile) {
+                        $profileData = $user->centreRadiologieProfile->toArray();
+                        $ville = $user->centreRadiologieProfile->ville ?? null;
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Error processing user profile:', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+                
+                // Add ville and profile data to main user object
+                $user->ville = $ville;
+                $user->profile_data = $profileData;
+                
+                // Add distance calculation for proximity search
+                if ($latitude && $longitude && $ville) {
+                    $user->distance = null; // Placeholder for distance calculation
+                }
+                
+                return $user;
+            })
+            ->filter(function($user) use ($latitude, $longitude, $radius) {
+                // Only return users that have a ville (city) set
+                if (empty($user->ville)) {
+                    return false;
+                }
+                
+                // For proximity search, return all users for now
+                if ($latitude && $longitude) {
+                    return true;
+                }
+                
+                return true;
+            })
+            ->values(); // Reset array keys after filtering
+
+            \Log::info('Processed users count:', ['count' => $processedUsers->count()]);
+
+            return response()->json($processedUsers->toArray());
+        } catch (\Exception $e) {
+            \Log::error('Error in public search: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return response()->json(['error' => 'Search failed: ' . $e->getMessage()], 500);
         }
     }
 
