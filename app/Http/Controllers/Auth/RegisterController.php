@@ -280,8 +280,8 @@ class RegisterController extends Controller
                     // Get the appropriate model class
                     $modelClass = 'App\\Models\\' . ucfirst($role->name) . 'Profile';
 
-                    // Create the profile with complete data
-                    $modelClass::create([
+                    // Create the profile with complete data including new fields
+                    $profileData = [
                         'user_id' => $user->id,
                         'specialty' => json_encode($specialtyData, JSON_UNESCAPED_UNICODE),
                         'experience_years' => $request->experience_years,
@@ -298,7 +298,32 @@ class RegisterController extends Controller
                         'profile_image' => $request->hasFile('profile_image') ? 
                             $request->file('profile_image')->store('public/profiles') : null,
                         'disponible' => true
-                    ]);
+                    ];
+
+                    // Add new profile fields
+                    if ($request->has('numero_carte_professionnelle')) {
+                        $profileData['numero_carte_professionnelle'] = $request->numero_carte_professionnelle;
+                    }
+                    if ($request->has('moyens_paiement')) {
+                        $profileData['moyens_paiement'] = $request->moyens_paiement ? json_encode($request->moyens_paiement, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('moyens_transport')) {
+                        $profileData['moyens_transport'] = $request->moyens_transport ? json_encode($request->moyens_transport, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('informations_pratiques')) {
+                        $profileData['informations_pratiques'] = $request->informations_pratiques;
+                    }
+                    if ($request->has('jours_disponibles')) {
+                        $profileData['jours_disponibles'] = $request->jours_disponibles ? json_encode($request->jours_disponibles, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('contact_urgence')) {
+                        $profileData['contact_urgence'] = $request->contact_urgence;
+                    }
+                    if ($request->has('rdv_patients_suivis_uniquement')) {
+                        $profileData['rdv_patients_suivis_uniquement'] = $request->rdv_patients_suivis_uniquement ? 1 : 0;
+                    }
+
+                    $modelClass::create($profileData);
                     break;
 
                 case 'clinique':
@@ -341,22 +366,48 @@ class RegisterController extends Controller
                     $clinicData = [
                         'user_id' => $user->id,
                         'nom_clinique' => $request->nom_etablissement,
+                        'responsable_name' => $request->responsable_name,
                         'adresse' => $request->adresse,
                         'ville' => $request->ville,
-                        'horaires' => json_encode([
-                            'start' => $request->horaire_start,
-                            'end' => $request->horaire_end
-                        ]),
-                        'responsable_name' => $request->responsable_name,
+                        'horaire_start' => $request->horaire_start,
+                        'horaire_end' => $request->horaire_end,
                         'services' => json_encode($servicesData),
+                        'profile_image' => null,
                         'etablissement_image' => $etablissementImagePath,
                         'rating' => 0.0,
                         'description' => $request->description,
-                        'org_presentation' => $request->org_presentation,
-                        'services_description' => $request->services_description,
-                        'additional_info' => $request->additional_info,
+                        'vacation_mode' => false,
+                        'vacation_auto_reactivate_date' => null,
                         'disponible' => true
                     ];
+
+                    // Add clinic profile fields from Auth.jsx form (removed unused fields)
+                    if ($request->has('services_description')) {
+                        $clinicData['services_description'] = $request->services_description;
+                    }
+                    if ($request->has('additional_info')) {
+                        $clinicData['additional_info'] = $request->additional_info;
+                    }
+                    if ($request->has('informations_pratiques')) {
+                        $clinicData['informations_pratiques'] = $request->informations_pratiques;
+                    }
+                    if ($request->has('contact_urgence')) {
+                        $clinicData['contact_urgence'] = $request->contact_urgence;
+                    }
+                    if ($request->has('presentation')) {
+                        $clinicData['presentation'] = $request->presentation;
+                    }
+                    
+                    // Add array fields
+                    if ($request->has('moyens_paiement')) {
+                        $clinicData['moyens_paiement'] = $request->moyens_paiement ? json_encode($request->moyens_paiement, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('moyens_transport')) {
+                        $clinicData['moyens_transport'] = $request->moyens_transport ? json_encode($request->moyens_transport, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('jours_disponibles')) {
+                        $clinicData['jours_disponibles'] = $request->jours_disponibles ? json_encode($request->jours_disponibles, JSON_UNESCAPED_UNICODE) : null;
+                    }
 
                     \Log::info('Clinic data to be saved:', $clinicData);
                     
@@ -399,46 +450,70 @@ class RegisterController extends Controller
                         'user_id' => $user->id,
                         'adresse' => $request->adresse,
                         'ville' => $request->ville,
+                        'horaire_start' => $request->horaire_start,
+                        'horaire_end' => $request->horaire_end,
                         'etablissement_image' => $etablissementImagePath,
                         'rating' => 0.0,
-                        'description' => $request->description,
-                        'org_presentation' => $request->org_presentation,
-                        'services_description' => $request->services_description,
-                        'additional_info' => $request->additional_info,
                         'disponible' => true
                     ];
+
+                    // Add common organization profile fields
+                    if ($request->has('presentation')) {
+                        $profileData['presentation'] = $request->presentation;
+                    }
+                    if ($request->has('additional_info')) {
+                        $profileData['additional_info'] = $request->additional_info;
+                    }
+                    if ($request->has('moyens_paiement')) {
+                        $profileData['moyens_paiement'] = $request->moyens_paiement ? json_encode($request->moyens_paiement, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('moyens_transport')) {
+                        $profileData['moyens_transport'] = $request->moyens_transport ? json_encode($request->moyens_transport, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('informations_pratiques')) {
+                        $profileData['informations_pratiques'] = $request->informations_pratiques;
+                    }
+                    if ($request->has('jours_disponibles')) {
+                        $profileData['jours_disponibles'] = $request->jours_disponibles ? json_encode($request->jours_disponibles, JSON_UNESCAPED_UNICODE) : null;
+                    }
+                    if ($request->has('contact_urgence')) {
+                        $profileData['contact_urgence'] = $request->contact_urgence;
+                    }
+                    
+                    // Add specific fields based on organization type
+                    if (in_array($role->name, ['pharmacie', 'labo_analyse'])) {
+                        if ($request->has('description')) {
+                            $profileData['description'] = $request->description;
+                        }
+                        if ($request->has('org_presentation')) {
+                            $profileData['org_presentation'] = $request->org_presentation;
+                        }
+                        if ($request->has('services_description')) {
+                            $profileData['services_description'] = $request->services_description;
+                        }
+                        $profileData['responsable_name'] = $request->responsable_name;
+                        $profileData['profile_image'] = null; // Can be added later
+                        $profileData['vacation_mode'] = false;
+                        $profileData['gallery'] = null;
+                    }
 
                     // Handle organization-specific fields
                     if ($role->name === 'labo_analyse') {
                         $profileData['nom_labo'] = $request->nom_etablissement;
-                        $profileData['responsable_name'] = $request->responsable_name;
-                        $profileData['services'] = $servicesData; // REMOVE json_encode
-                        $profileData['horaires'] = json_encode([
-                            'start' => $request->horaire_start,
-                            'end' => $request->horaire_end
-                        ]);
+                        $profileData['gerant_name'] = $request->responsable_name;
+                        $profileData['services'] = json_encode($servicesData);
                     } elseif ($role->name === 'centre_radiologie') {
                         $profileData['nom_centre'] = $request->nom_etablissement;
-                        $profileData['responsable_name'] = $request->responsable_name;
-                        $profileData['services'] = $servicesData; // REMOVE json_encode
-                        $profileData['horaires'] = json_encode([
-                            'start' => $request->horaire_start,
-                            'end' => $request->horaire_end
-                        ]);
+                        $profileData['gerant_name'] = $request->responsable_name;
+                        $profileData['services'] = json_encode($servicesData);
                     } elseif ($role->name === 'pharmacie') {
                         $profileData['nom_pharmacie'] = $request->nom_etablissement;
-                        $profileData['responsable_name'] = $request->responsable_name;
-                        $profileData['horaires'] = json_encode([
-                            'start' => $request->horaire_start,
-                            'end' => $request->horaire_end
-                        ]);
+                        $profileData['gerant_name'] = $request->responsable_name;
+                        $profileData['services'] = json_encode($servicesData);
                     } elseif ($role->name === 'parapharmacie') {
                         $profileData['nom_parapharmacie'] = $request->nom_etablissement;
-                        $profileData['responsable_name'] = $request->responsable_name;
-                        $profileData['horaires'] = json_encode([
-                            'start' => $request->horaire_start,
-                            'end' => $request->horaire_end
-                        ]);
+                        $profileData['gerant_name'] = $request->responsable_name;
+                        $profileData['services'] = json_encode($servicesData);
                     }
 
                     $modelClass::create($profileData);

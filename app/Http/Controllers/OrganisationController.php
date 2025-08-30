@@ -36,12 +36,12 @@ class OrganisationController extends Controller
                     'users.phone',
                     'users.is_verified',
                     'roles.name as type',
-                    $tableName . '.gallery',
                     $tableName . '.etablissement_image',
                     $tableName . '.rating',
                     $tableName . '.description',
                     $tableName . '.adresse as location',
-                    $tableName . '.horaires'
+                    $tableName . '.horaire_start',
+                    $tableName . '.horaire_end'
                 )
                 ->get();
 
@@ -81,14 +81,9 @@ class OrganisationController extends Controller
                         break;
                 }
 
-                // Extract first image from gallery JSON or etablissement_image
+                // Extract first image from etablissement_image
                 $galleryImages = null;
-                if ($org->gallery) {
-                    $gallery = json_decode($org->gallery, true);
-                    if (is_array($gallery) && !empty($gallery)) {
-                        $galleryImages = $gallery[0]; // Get first image
-                    }
-                } elseif ($org->etablissement_image) {
+                if ($org->etablissement_image) {
                     $galleryImages = $org->etablissement_image;
                 }
 
@@ -102,7 +97,10 @@ class OrganisationController extends Controller
                     'description' => $org->description ?: 'Description par défaut pour ' . $orgName,
                     'phone' => $org->phone,
                     'email' => $org->email,
-                    'horaires' => $org->horaires,
+                    'horaires' => [
+                        'start' => $org->horaire_start,
+                        'end' => $org->horaire_end
+                    ],
                     'is_verified' => $org->is_verified, // Add for debugging
                     'available' => true
                 ];
@@ -156,11 +154,12 @@ class OrganisationController extends Controller
                         'users.phone',
                         'users.is_verified',
                         'roles.name as type',
-                        $tableName . '.gallery',
+                        $tableName . '.etablissement_image',
                         $tableName . '.rating',
                         $tableName . '.description',
                         $tableName . '.adresse as location',
-                        $tableName . '.horaires'
+                        $tableName . '.horaire_start',
+                        $tableName . '.horaire_end'
                     )
                     ->get();
                     
@@ -188,10 +187,12 @@ class OrganisationController extends Controller
     }
 
     /**
-     * Get single organization details
+     * Get single organization details (public, no auth required)
      */
-    public function show($id)
+    public function publicShow($id)
     {
+        \Log::info("OrganisationController::publicShow called with ID: $id");
+        
         // Get the user and their role
         $user = DB::table('users')
             ->join('roles', 'users.role_id', '=', 'roles.id')
@@ -200,21 +201,30 @@ class OrganisationController extends Controller
             ->first();
 
         if (!$user) {
+            \Log::error("User not found for ID: $id");
             return response()->json(['message' => 'Organization not found'], 404);
         }
 
+        \Log::info("User found: " . json_encode(['id' => $user->id, 'name' => $user->name, 'role' => $user->role_name]));
+
         $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
         if (!in_array($user->role_name, $orgTypes)) {
-            return response()->json(['message' => 'Not an organization'], 404);
+            \Log::error("User is not an organization. Role: " . $user->role_name);
+            return response()->json(['message' => 'Not an organization', 'role' => $user->role_name], 404);
         }
 
         // Get organization profile data
         $tableName = $user->role_name . '_profiles';
+        \Log::info("Looking for profile in table: $tableName");
+        
         $profile = DB::table($tableName)->where('user_id', $id)->first();
 
         if (!$profile) {
-            return response()->json(['message' => 'Organization profile not found'], 404);
+            \Log::error("Profile not found in table: $tableName for user_id: $id");
+            return response()->json(['message' => 'Organization profile not found', 'table' => $tableName], 404);
         }
+
+        \Log::info("Profile found in $tableName: " . json_encode($profile));
 
         // Get organization-specific name
         $orgName = $user->name;
@@ -236,22 +246,21 @@ class OrganisationController extends Controller
                 break;
         }
 
-        // Extract gallery images - check both gallery and etablissement_image fields
+        // Extract gallery images - check etablissement_image field
         $galleryImages = [];
-        if ($profile->gallery) {
-            $gallery = json_decode($profile->gallery, true);
-            if (is_array($gallery)) {
-                $galleryImages = $gallery;
-            }
-        } elseif (isset($profile->etablissement_image) && $profile->etablissement_image) {
-            // Fallback to etablissement_image field if gallery is empty
+        if (isset($profile->etablissement_image) && $profile->etablissement_image) {
             $galleryImages = [$profile->etablissement_image];
         }
 
-        // Parse horaires
+        // Parse horaires - use horaire_start and horaire_end fields directly
+        $horaireStart = $profile->horaire_start ?? null;
+        $horaireEnd = $profile->horaire_end ?? null;
         $horaires = null;
-        if ($profile->horaires) {
-            $horaires = json_decode($profile->horaires, true);
+        if ($horaireStart && $horaireEnd) {
+            $horaires = [
+                'start' => $horaireStart,
+                'end' => $horaireEnd
+            ];
         }
 
         // Parse services for labo and centre_radiologie
@@ -264,22 +273,57 @@ class OrganisationController extends Controller
             'id' => $user->id,
             'name' => $orgName,
             'type' => $user->role_name,
+            'role' => $user->role_name,
+            'role_name' => $user->role_name,
             'email' => $user->email,
             'phone' => $user->phone,
-            'location' => $profile->adresse,
+            'adresse' => $profile->adresse ?? null,
+            'location' => $profile->adresse ?? null,
+            'ville' => $profile->ville ?? null,
+            'localisation' => $profile->localisation ?? null,
             'rating' => $profile->rating ?: 0,
-            'description' => $profile->description ?: 'Description par défaut pour ' . $orgName,
+            'description' => $profile->description ?? null,
+            'org_presentation' => $profile->org_presentation ?? null,
+            'services_description' => $profile->services_description ?? null,
+            'additional_info' => $profile->additional_info ?? null,
+            'informations_pratiques' => $profile->informations_pratiques ?? null,
+            'contact_urgence' => $profile->contact_urgence ?? null,
+            'presentation' => $profile->presentation ?? null,
             'gallery' => $galleryImages,
+            'etablissement_image' => $profile->etablissement_image ?? null,
+            'profile_image' => $profile->profile_image ?? null,
             'horaires' => $horaires,
+            'horaire_start' => $horaireStart,
+            'horaire_end' => $horaireEnd,
             'services' => $services,
+            'moyens_paiement' => isset($profile->moyens_paiement) ? json_decode($profile->moyens_paiement, true) : [],
+            'moyens_transport' => isset($profile->moyens_transport) ? json_decode($profile->moyens_transport, true) : [],
+            'jours_disponibles' => isset($profile->jours_disponibles) ? json_decode($profile->jours_disponibles, true) : [],
             'is_verified' => $user->is_verified,
+            'responsable_name' => $profile->responsable_name ?? null,
             'gerant_name' => $profile->gerant_name ?? null,
             'nbr_personnel' => $profile->nbr_personnel ?? null,
-            'localisation' => $profile->localisation ?? null,
             'disponible' => $profile->disponible ?? true,
-            'created_at' => $user->created_at
+            'vacation_mode' => $profile->vacation_mode ?? false,
+            'absence_start_date' => $profile->absence_start_date ?? null,
+            'absence_end_date' => $profile->absence_end_date ?? null,
+            'created_at' => $user->created_at,
+            // Add organization-specific name fields
+            'nom_clinique' => $profile->nom_clinique ?? null,
+            'nom_pharmacie' => $profile->nom_pharmacie ?? null,
+            'nom_parapharmacie' => $profile->nom_parapharmacie ?? null,
+            'nom_labo' => $profile->nom_labo ?? null,
+            'nom_centre' => $profile->nom_centre ?? null
         ];
 
         return response()->json($organization);
+    }
+
+    /**
+     * Get single organization details (requires auth)
+     */
+    public function show($id)
+    {
+        return $this->publicShow($id);
     }
 }

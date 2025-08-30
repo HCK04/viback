@@ -41,7 +41,14 @@ Route::post('/site-stats/bump', [SiteStatsController::class, 'bump']);
 // Public search routes (no authentication required)
 Route::get('/users', [UserController::class, 'publicSearch']);
 Route::get('/medecins', [MedecinController::class, 'publicIndex']);
-Route::get('/organisations', [OrganisationController::class, 'publicIndex']);
+Route::get('/medecins/{id}', [MedecinController::class, 'publicShow']);
+Route::get('/organisations', [OrganisationController::class, 'index']);
+Route::get('/organisations/{id}', [OrganisationController::class, 'publicShow']);
+Route::get('/users/{id}', [UserController::class, 'publicShow']);
+
+// Universal profile endpoints - auto-detect profile type
+Route::get('/profiles/{id}', [App\Http\Controllers\ProfileController::class, 'show']);
+Route::get('/professionals/{id}', [App\Http\Controllers\ProfessionalController::class, 'show']);
 
 // Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -85,18 +92,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // Medecins
     Route::get('/medecins', [MedecinController::class, 'index']);
 
-    // Organisations
-    Route::get('/organisations', [OrganisationController::class, 'index']);
+    // Organisations (authenticated)
     Route::get('/organisations/debug', [OrganisationController::class, 'debug']);
-    Route::get('/organisations/{id}', [OrganisationController::class, 'show']);
 
-    // Appointment routes
-    Route::post('/appointments', [AppointmentController::class, 'store']);
+    // Appointment booking routes (aliases for rendezvous)
+    Route::post('/rendezvous', [AppointmentController::class, 'store']);
+    Route::get('/rendezvous/{id}', [AppointmentController::class, 'show']);
+    Route::get('/appointments/booked-slots/{doctorId}', [AppointmentController::class, 'getBookedSlots']); // Add alias for frontend compatibility
     Route::get('/appointments', [AppointmentController::class, 'index']);
     Route::get('/appointments/{id}', [AppointmentController::class, 'show']);
+    Route::get('/rendezvous/{id}', [AppointmentController::class, 'show']); // Add alias for frontend compatibility
     Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
+    Route::post('/appointments/{id}/cancel', [AppointmentController::class, 'cancel']);
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
-    Route::get('/appointments/booked-slots/{doctorId}', [AppointmentController::class, 'getBookedSlots']);
     Route::get('/doctors/{id}/available-hours', [MedecinController::class, 'availableHours']);
     
     // Stripe subscription routes

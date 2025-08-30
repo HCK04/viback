@@ -137,11 +137,14 @@ class AppointmentController extends Controller
                 'doctor_name' => $rdv->target ? $rdv->target->name : 'Médecin inconnu',
                 'date' => $rdv->date_time ? Carbon::parse($rdv->date_time)->format('Y-m-d') : null,
                 'time' => $rdv->date_time ? Carbon::parse($rdv->date_time)->format('H:i') : null,
+                'date_time' => $rdv->date_time,
                 'reason' => $rdv->reason ?? 'Consultation',
                 'status' => $rdv->status ?? 'scheduled',
-                'patient_name' => $user->name,
+                'patient_id' => $rdv->patient_id,
+                'patient_name' => $rdv->patient_name ?? $user->name,
                 'patient_phone' => $rdv->patient_phone ?? $user->phone ?? null,
                 'patient_email' => $rdv->patient_email ?? $user->email ?? null,
+                'target_user_id' => $rdv->target_user_id,
                 'target_role' => $rdv->target_role,
                 'target_id' => $rdv->target_id,
                 'annonce' => $annonce ? [
@@ -189,13 +192,14 @@ class AppointmentController extends Controller
         
         $validator = Validator::make($request->all(), [
             'target_user_id' => 'required|exists:users,id',
-            'target_role' => 'required|string|in:doctor,medecin',
+            'target_role' => 'required|string|in:doctor,medecin,kine,orthophoniste,psychologue,clinique,pharmacie,parapharmacie,labo_analyse,centre_radiologie',
             'date_time' => 'required|string',
             'reason' => 'required|string|max:500',
             'patient_name' => 'nullable|string|max:255',
             'patient_phone' => 'nullable|string|max:20',
             'patient_email' => 'nullable|email|max:255',
             'announcement_id' => 'nullable|exists:annonces,id',
+            'notes' => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -223,10 +227,23 @@ class AppointmentController extends Controller
 
         $doctor = User::findOrFail($request->target_user_id);
 
-        // Parse date_time with explicit format
+        // Parse date_time with multiple possible formats
         try {
-            // Expected format: "2025-08-24 20:58"
-            $dateTime = Carbon::createFromFormat('Y-m-d H:i', $request->date_time);
+            // Try multiple formats: with seconds or without
+            $dateTime = null;
+            $formats = ['Y-m-d H:i:s', 'Y-m-d H:i'];
+            
+            foreach ($formats as $format) {
+                try {
+                    $dateTime = Carbon::createFromFormat($format, $request->date_time);
+                    if ($dateTime) {
+                        break;
+                    }
+                } catch (\Exception $formatException) {
+                    continue;
+                }
+            }
+            
             if (!$dateTime) {
                 throw new \Exception('Invalid date format');
             }
@@ -261,20 +278,21 @@ class AppointmentController extends Controller
             $rdv->patient_phone = $request->patient_phone ?? $user->phone;
             $rdv->patient_email = $request->patient_email ?? $user->email;
             $rdv->target_user_id = $doctor->id;
-            $rdv->target_role = 'medecin';
+            $rdv->target_role = $request->target_role;
             // Save annonce_id to link appointment with announcement
             $rdv->annonce_id = $request->announcement_id ?? null;
             $rdv->date_time = $dateTime->format('Y-m-d H:i:s');
-            $rdv->status = 'scheduled';
+            $rdv->status = 'confirmed';
             $rdv->reason = $request->reason;
+            $rdv->notes = $request->notes;
             
             \Log::info("Creating appointment with data: " . json_encode([
                 'patient_id' => $user->id,
                 'target_user_id' => $doctor->id,
-                'target_role' => 'medecin',
+                'target_role' => $request->target_role,
                 'annonce_id' => $request->announcement_id ?? null,
                 'date_time' => $dateTime->format('Y-m-d H:i:s'),
-                'status' => 'scheduled',
+                'status' => 'confirmed',
                 'reason' => $request->reason
             ]));
             
@@ -295,6 +313,7 @@ class AppointmentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Rendez-vous créé avec succès',
+                'id' => $rdv->id,
                 'appointment' => [
                     'id' => $rdv->id,
                     'doctor_id' => $doctor->id,

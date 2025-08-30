@@ -14,20 +14,35 @@ class OrthophonisteProfile extends Model
         'specialty',
         'experience_years',
         'horaires',
+        'horaire_start',
+        'horaire_end',
         'diplomas',
         'adresse',
+        'ville',
         'disponible',
         'absence_start_date',
         'absence_end_date',
         'presentation',
+        'additional_info',
         'carte_professionnelle',
-        'experiences'
+        'experiences',
+        // NEW PROFILE FIELDS
+        'numero_carte_professionnelle',
+        'moyens_paiement',
+        'moyens_transport',
+        'informations_pratiques',
+        'jours_disponibles',
+        'contact_urgence',
+        'rdv_patients_suivis_uniquement'
     ];
 
     protected $casts = [
         'diplomas' => 'array',
         'diplomes' => 'array',
-        'experiences' => 'array'
+        'experiences' => 'array',
+        'moyens_paiement' => 'array',
+        'moyens_transport' => 'array',
+        'jours_disponibles' => 'array'
     ];
     
     public function user() {

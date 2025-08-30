@@ -12,6 +12,47 @@ use App\Models\User;
 class MedecinController extends Controller
 {
     /**
+     * Get public individual professional profile by ID
+     */
+    public function publicShow($id)
+    {
+        // Try different professional profile types
+        $profileTypes = [
+            'medecin_profiles' => MedecinProfile::class,
+            'kine_profiles' => KineProfile::class,
+            'orthophoniste_profiles' => OrthophonisteProfile::class,
+            'psychologue_profiles' => PsychologueProfile::class,
+        ];
+
+        foreach ($profileTypes as $table => $model) {
+            $profile = $model::with('user')->where('user_id', $id)->first();
+            if ($profile && $profile->user) {
+                return response()->json([
+                    'id' => $profile->user->id,
+                    'name' => $profile->user->name,
+                    'email' => $profile->user->email,
+                    'phone' => $profile->user->phone,
+                    'type' => str_replace('_profiles', '', $table),
+                    'specialty' => $profile->specialty ?? null,
+                    'experience_years' => $profile->experience_years ?? null,
+                    'adresse' => $profile->adresse ?? null,
+                    'ville' => $profile->ville ?? null,
+                    'horaire_start' => $profile->horaire_start ?? null,
+                    'horaire_end' => $profile->horaire_end ?? null,
+                    'disponible' => $profile->disponible ?? true,
+                    'rating' => $profile->rating ?? 0,
+                    'presentation' => $profile->presentation ?? null,
+                    'additional_info' => $profile->additional_info ?? null,
+                    'is_verified' => $profile->user->is_verified,
+                    'created_at' => $profile->user->created_at
+                ]);
+            }
+        }
+
+        return response()->json(['message' => 'Professional not found'], 404);
+    }
+
+    /**
      * Get all professionnels de santé (médecins, kinés, orthophonistes, psychologues)
      */
     public function index(Request $request)

@@ -317,9 +317,12 @@ class UserController extends Controller
                 'centreRadiologieProfile'
             ])
             ->whereHas('role', function($query) {
-                $query->whereNotIn('name', ['patient', 'admin']);
+                // Exclude admin (id=1) and patient roles - include all healthcare professionals and organizations
+                $query->whereNotIn('name', ['admin', 'patient']);
             })
             ->get();
+
+            \Log::info('PublicSearch: Found ' . $users->count() . ' users after role filtering');
 
             \Log::info('Found users count:', ['count' => $users->count()]);
 
@@ -431,9 +434,10 @@ class UserController extends Controller
             })
             ->values(); // Reset array keys after filtering
 
-            \Log::info('Processed users count:', ['count' => $processedUsers->count()]);
-
-            return response()->json($processedUsers->toArray());
+            return response()->json([
+                'data' => $processedUsers->toArray(),
+                'count' => $processedUsers->count()
+            ]);
         } catch (\Exception $e) {
             \Log::error('Error in public search: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
@@ -556,5 +560,28 @@ class UserController extends Controller
             \Log::error('Error deleting user: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to delete user'], 500);
         }
+    }
+
+    /**
+     * Get public user profile by ID
+     */
+    public function publicShow($id)
+    {
+        $user = User::with('role')->find($id);
+        
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+        
+        // Return basic public information
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'role' => $user->role->name ?? null,
+            'is_verified' => $user->is_verified,
+            'created_at' => $user->created_at
+        ]);
     }
 }
