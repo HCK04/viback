@@ -15,6 +15,7 @@ use App\Http\Controllers\SiteStatsController;
 use App\Http\Controllers\MedecinController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\StripeController;
+use App\Http\Controllers\StatisticsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -37,6 +38,10 @@ Route::get('/annonces/{id}', [AnnonceController::class, 'show']);
 // NEW: make site stats public
 Route::get('/site-stats', [SiteStatsController::class, 'getStats']);
 Route::post('/site-stats/bump', [SiteStatsController::class, 'bump']);
+
+// Statistics routes for auto-incrementing counters
+Route::get('/statistics', [StatisticsController::class, 'getStatistics']);
+Route::post('/statistics/reset', [StatisticsController::class, 'resetStatistics']);
 
 // Public search routes (no authentication required)
 Route::get('/users', [UserController::class, 'publicSearch']);
