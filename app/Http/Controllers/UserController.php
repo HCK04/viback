@@ -284,13 +284,30 @@ class UserController extends Controller
         $allowedOrigins = [
             'http://localhost:3000',
             'http://127.0.0.1:3000',
-            'https://your-production-domain.com'
+            'https://vi-santé.com',
+            'https://www.vi-santé.com',
+            'https://api.vi-santé.com',
+            'https://xn--vi-sant-hya.com',
+            'https://www.xn--vi-sant-hya.com',
+            'https://api.xn--vi-sant-hya.com'
         ];
         
-        if ($origin && !in_array(rtrim($origin, '/'), $allowedOrigins)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+        // Allow all subdomains of vi-santé.com
+        $allowedPatterns = [
+            '/^https?:\/\/[a-z0-9-]+\.vi-santé\.com$/',
+            '/^https?:\/\/[a-z0-9-]+\.xn--vi-sant-hya\.com$/',
+        ];
         
+        $isAllowed = in_array($origin, $allowedOrigins) || 
+                    collect($allowedPatterns)->contains(function ($pattern) use ($origin) {
+                        return $origin && preg_match($pattern, $origin);
+                    });
+        
+        if (!$isAllowed) {
+            \Log::warning('Blocked request from unauthorized origin: ' . $origin);
+            return response()->json(['error' => 'Unauthorized origin'], 403);
+        }
+
         // Get proximity search parameters
         $latitude = $request->query('lat');
         $longitude = $request->query('lng');
@@ -307,7 +324,7 @@ class UserController extends Controller
             $users = User::with([
                 'role',
                 'medecinProfile',
-                'kineProfile', 
+                'kineProfile',
                 'orthophonisteProfile',
                 'psychologueProfile',
                 'cliniqueProfile',
