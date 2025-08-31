@@ -25,13 +25,13 @@ return [
         'https://api.vi-santé.com',
         'https://xn--vi-sant-hya.com',
         'https://api.xn--vi-sant-hya.com',
-        // Add these for direct API route access if needed:
         'https://vi-santé.com/api/medecins',
         'https://vi-santé.com/api/appointments',
         'https://vi-santé.com/api/organisations',
         'https://api.vi-sant-hya.com/api/medecins',
         'https://api.vi-sant-hya.com/api/appointments',
         'https://api.vi-sant-hya.com/api/organisations',
+        'https://api.vi-sant-hya.com/api/check-availability',
     ],
 
     'allowed_origins_patterns' => [],
