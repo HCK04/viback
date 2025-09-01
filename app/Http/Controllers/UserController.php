@@ -519,7 +519,9 @@ class UserController extends Controller
             return response()->json([
                 'data' => $processedUsers->toArray(),
                 'count' => $processedUsers->count()
-            ]);
+            ])->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+              ->header('Pragma', 'no-cache')
+              ->header('Expires', '0');
         } catch (\Exception $e) {
             \Log::error('Error in public search: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
