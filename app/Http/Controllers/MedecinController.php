@@ -331,10 +331,10 @@ class MedecinController extends Controller
                     }
                 }
                 
-                // Final fallback to default hours
+                // NO FALLBACK - if no hours configured, return empty array
                 if (empty($hours)) {
-                    \Log::info("No hours generated from any source, using default schedule");
-                    $hours = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
+                    \Log::info("No hours configured by professional - returning empty schedule");
+                    $hours = [];
                 }
             }
 

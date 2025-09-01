@@ -87,6 +87,9 @@ class ProfessionalController extends Controller
 
     private function formatProfessionalProfile($user, $profile)
     {
+        Log::info("=== FORMATTING PROFESSIONAL PROFILE FOR USER {$user->id} ===");
+        Log::info("Raw profile data: " . json_encode($profile));
+        
         // Parse JSON fields
         $specialties = [];
         if (isset($profile->specialty) && $profile->specialty) {
@@ -108,20 +111,32 @@ class ProfessionalController extends Controller
 
         $moyensPaiement = [];
         if (isset($profile->moyens_paiement) && $profile->moyens_paiement) {
+            Log::info("Raw moyens_paiement: " . $profile->moyens_paiement);
             $decoded = json_decode($profile->moyens_paiement, true);
             $moyensPaiement = is_array($decoded) ? $decoded : [];
+            Log::info("Parsed moyens_paiement: " . json_encode($moyensPaiement));
+        } else {
+            Log::info("No moyens_paiement found");
         }
 
         $moyensTransport = [];
         if (isset($profile->moyens_transport) && $profile->moyens_transport) {
+            Log::info("Raw moyens_transport: " . $profile->moyens_transport);
             $decoded = json_decode($profile->moyens_transport, true);
             $moyensTransport = is_array($decoded) ? $decoded : [];
+            Log::info("Parsed moyens_transport: " . json_encode($moyensTransport));
+        } else {
+            Log::info("No moyens_transport found");
         }
 
         $joursDisponibles = [];
         if (isset($profile->jours_disponibles) && $profile->jours_disponibles) {
+            Log::info("Raw jours_disponibles: " . $profile->jours_disponibles);
             $decoded = json_decode($profile->jours_disponibles, true);
             $joursDisponibles = is_array($decoded) ? $decoded : [];
+            Log::info("Parsed jours_disponibles: " . json_encode($joursDisponibles));
+        } else {
+            Log::info("No jours_disponibles found");
         }
 
         return [

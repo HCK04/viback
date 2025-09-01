@@ -55,9 +55,18 @@ class UserController extends Controller
         $profileRelations = ['profile', 'patientProfile'];
         
         // Add professional profiles based on role
-        // Check multiple role IDs that could be doctors
-        if (in_array($user->role_id, [2, 4])) { // Medecin role (2 from schema, 4 from your user)
+        // Check multiple role IDs that could be professionals
+        if (in_array($user->role_id, [2, 4])) { // Medecin role
             $profileRelations[] = 'medecinProfile';
+        }
+        if (in_array($user->role_id, [3])) { // Kine role
+            $profileRelations[] = 'kineProfile';
+        }
+        if (in_array($user->role_id, [5])) { // Orthophoniste role
+            $profileRelations[] = 'orthophonisteProfile';
+        }
+        if (in_array($user->role_id, [6])) { // Psychologue role
+            $profileRelations[] = 'psychologueProfile';
         }
         
         return response()->json($user->load($profileRelations));
@@ -124,8 +133,16 @@ class UserController extends Controller
             'other_specialty' => 'nullable|string',
             'experience_years' => 'nullable|numeric',
             'address' => 'nullable|string',
+            'ville' => 'nullable|string',
+            'presentation' => 'nullable|string',
+            'additional_info' => 'nullable|string',
             'horaire_start' => 'nullable|string',
             'horaire_end' => 'nullable|string',
+            'jours_disponibles' => 'nullable|string',
+            'moyens_transport' => 'nullable|string',
+            'moyens_paiement' => 'nullable|string',
+            'informations_pratiques' => 'nullable|string',
+            'contact_urgence' => 'nullable|string',
         ]);
 
         // Update user basic info
@@ -186,51 +203,90 @@ class UserController extends Controller
             }
         }
 
-        // If this is a doctor, also update medecin_profile
+        // Update professional profiles based on role
+        $professionalProfile = null;
+        
         if (in_array($user->role_id, [2, 4])) { // Medecin role ID
-            $medecinProfile = $user->medecinProfile;
-            if (!$medecinProfile) {
-                $medecinProfile = new \App\Models\MedecinProfile();
-                $medecinProfile->user_id = $user->id;
+            $professionalProfile = $user->medecinProfile;
+            if (!$professionalProfile) {
+                $professionalProfile = new \App\Models\MedecinProfile();
+                $professionalProfile->user_id = $user->id;
             }
+        } elseif (in_array($user->role_id, [3])) { // Kine role ID
+            $professionalProfile = $user->kineProfile;
+            if (!$professionalProfile) {
+                $professionalProfile = new \App\Models\KineProfile();
+                $professionalProfile->user_id = $user->id;
+            }
+        } elseif (in_array($user->role_id, [5])) { // Orthophoniste role ID
+            $professionalProfile = $user->orthophonisteProfile;
+            if (!$professionalProfile) {
+                $professionalProfile = new \App\Models\OrthophonisteProfile();
+                $professionalProfile->user_id = $user->id;
+            }
+        } elseif (in_array($user->role_id, [6])) { // Psychologue role ID
+            $professionalProfile = $user->psychologueProfile;
+            if (!$professionalProfile) {
+                $professionalProfile = new \App\Models\PsychologueProfile();
+                $professionalProfile->user_id = $user->id;
+            }
+        }
 
-            // Update doctor-specific fields
+        if ($professionalProfile) {
+            // Update professional-specific fields
             if ($request->filled('specialty')) {
-                $medecinProfile->specialty = $request->specialty;
+                $professionalProfile->specialty = $request->specialty;
             }
             if ($request->filled('experience_years')) {
-                $medecinProfile->experience_years = $request->experience_years;
+                $professionalProfile->experience_years = $request->experience_years;
             }
             if ($request->filled('address')) {
-                $medecinProfile->adresse = $request->address;
+                $professionalProfile->adresse = $request->address;
             }
             if ($request->filled('ville')) {
-                $medecinProfile->ville = $request->ville;
+                $professionalProfile->ville = $request->ville;
             }
             if ($request->filled('presentation')) {
-                $medecinProfile->presentation = $request->presentation;
+                $professionalProfile->presentation = $request->presentation;
             }
             if ($request->filled('additional_info')) {
-                $medecinProfile->additional_info = $request->additional_info;
+                $professionalProfile->additional_info = $request->additional_info;
             }
             
             // Handle separate time fields
             if ($request->filled('horaire_start')) {
-                $medecinProfile->horaire_start = $request->horaire_start;
+                $professionalProfile->horaire_start = $request->horaire_start;
             }
             if ($request->filled('horaire_end')) {
-                $medecinProfile->horaire_end = $request->horaire_end;
+                $professionalProfile->horaire_end = $request->horaire_end;
             }
             
             // Keep backward compatibility with horaires JSON
             if ($request->filled('horaire_start') && $request->filled('horaire_end')) {
-                $medecinProfile->horaires = json_encode([
+                $professionalProfile->horaires = json_encode([
                     'start' => $request->horaire_start,
                     'end' => $request->horaire_end
                 ]);
             }
 
-            $medecinProfile->save();
+            // Handle working days, transport, and payment methods
+            if ($request->has('jours_disponibles')) {
+                $professionalProfile->jours_disponibles = $request->jours_disponibles;
+            }
+            if ($request->has('moyens_transport')) {
+                $professionalProfile->moyens_transport = $request->moyens_transport;
+            }
+            if ($request->has('moyens_paiement')) {
+                $professionalProfile->moyens_paiement = $request->moyens_paiement;
+            }
+            if ($request->filled('informations_pratiques')) {
+                $professionalProfile->informations_pratiques = $request->informations_pratiques;
+            }
+            if ($request->filled('contact_urgence')) {
+                $professionalProfile->contact_urgence = $request->contact_urgence;
+            }
+
+            $professionalProfile->save();
         }
 
         // Log what was updated
@@ -252,6 +308,15 @@ class UserController extends Controller
         $profileRelations = ['profile', 'patientProfile'];
         if (in_array($user->role_id, [2, 4])) {
             $profileRelations[] = 'medecinProfile';
+        }
+        if (in_array($user->role_id, [3])) {
+            $profileRelations[] = 'kineProfile';
+        }
+        if (in_array($user->role_id, [5])) {
+            $profileRelations[] = 'orthophonisteProfile';
+        }
+        if (in_array($user->role_id, [6])) {
+            $profileRelations[] = 'psychologueProfile';
         }
 
         return response()->json([
@@ -584,21 +649,68 @@ class UserController extends Controller
      */
     public function publicShow($id)
     {
-        $user = User::with('role')->find($id);
+        // Load user with all possible profile relations
+        $user = User::with([
+            'role',
+            'medecinProfile',
+            'kineProfile', 
+            'orthophonisteProfile',
+            'psychologueProfile',
+            'cliniqueProfile',
+            'pharmacieProfile',
+            'parapharmacieProfile',
+            'laboAnalyseProfile',
+            'centreRadiologieProfile'
+        ])->find($id);
         
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
         }
         
-        // Return basic public information
-        return response()->json([
+        // Build response with complete profile data
+        $response = [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'phone' => $user->phone,
             'role' => $user->role->name ?? null,
+            'role_name' => $user->role->name ?? null,
+            'role_id' => $user->role_id,
             'is_verified' => $user->is_verified,
             'created_at' => $user->created_at
-        ]);
+        ];
+        
+        // Add professional profile data if exists
+        if ($user->medecinProfile) {
+            $response['medecinProfile'] = $user->medecinProfile;
+        }
+        if ($user->kineProfile) {
+            $response['kineProfile'] = $user->kineProfile;
+        }
+        if ($user->orthophonisteProfile) {
+            $response['orthophonisteProfile'] = $user->orthophonisteProfile;
+        }
+        if ($user->psychologueProfile) {
+            $response['psychologueProfile'] = $user->psychologueProfile;
+        }
+        
+        // Add organization profile data if exists
+        if ($user->cliniqueProfile) {
+            $response['cliniqueProfile'] = $user->cliniqueProfile;
+        }
+        if ($user->pharmacieProfile) {
+            $response['pharmacieProfile'] = $user->pharmacieProfile;
+        }
+        if ($user->parapharmacieProfile) {
+            $response['parapharmacieProfile'] = $user->parapharmacieProfile;
+        }
+        if ($user->laboAnalyseProfile) {
+            $response['laboAnalyseProfile'] = $user->laboAnalyseProfile;
+        }
+        if ($user->centreRadiologieProfile) {
+            $response['centreRadiologieProfile'] = $user->centreRadiologieProfile;
+        }
+        
+        return response()->json($response);
     }
 }

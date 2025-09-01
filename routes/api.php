@@ -54,6 +54,7 @@ Route::get('/users/{id}', [UserController::class, 'publicShow']);
 // Universal profile endpoints - auto-detect profile type
 Route::get('/profiles/{id}', [App\Http\Controllers\ProfileController::class, 'show']);
 Route::get('/professionals/{id}', [App\Http\Controllers\ProfessionalController::class, 'show']);
+Route::get('/rendezvous/professional/{id}', [App\Http\Controllers\RendezVousController::class, 'getProfessionalData']);
 
 // Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
