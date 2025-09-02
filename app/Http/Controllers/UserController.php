@@ -116,213 +116,222 @@ class UserController extends Controller
      */
     public function updateProfile(Request $request)
     {
-        $user = auth()->user();
+        try {
+            $user = auth()->user();
 
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'age' => 'nullable|numeric',
-            'gender' => 'nullable|string',
-            'blood_type' => 'nullable|string',
-            'allergies' => 'nullable',
-            'chronic_diseases' => 'nullable',
-            'password' => 'nullable|string|min:8|confirmed',
-            // Doctor profile fields
-            'specialty' => 'nullable|string',
-            'other_specialty' => 'nullable|string',
-            'experience_years' => 'nullable|numeric',
-            'address' => 'nullable|string',
-            'ville' => 'nullable|string',
-            'presentation' => 'nullable|string',
-            'additional_info' => 'nullable|string',
-            'horaire_start' => 'nullable|string',
-            'horaire_end' => 'nullable|string',
-            'jours_disponibles' => 'nullable|string',
-            'moyens_transport' => 'nullable|string',
-            'moyens_paiement' => 'nullable|string',
-            'informations_pratiques' => 'nullable|string',
-            'contact_urgence' => 'nullable|string',
-        ]);
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'phone' => 'nullable|string|max:20',
+                'email' => 'required|email|unique:users,email,' . $user->id,
+                'age' => 'nullable|numeric',
+                'gender' => 'nullable|string',
+                'blood_type' => 'nullable|string',
+                'allergies' => 'nullable',
+                'chronic_diseases' => 'nullable',
+                'password' => 'nullable|string|min:8|confirmed',
+                // Doctor profile fields
+                'specialty' => 'nullable|string',
+                'other_specialty' => 'nullable|string',
+                'experience_years' => 'nullable|numeric',
+                'address' => 'nullable|string',
+                'ville' => 'nullable|string',
+                'presentation' => 'nullable|string',
+                'additional_info' => 'nullable|string',
+                'horaire_start' => 'nullable|string',
+                'horaire_end' => 'nullable|string',
+                'jours_disponibles' => 'nullable|string',
+                'moyens_transport' => 'nullable|string',
+                'moyens_paiement' => 'nullable|string',
+                'informations_pratiques' => 'nullable|string',
+                'contact_urgence' => 'nullable|string',
+            ]);
 
-        // Update user basic info
-        $user->name = $request->name;
-        $user->email = $request->email;
-        $user->phone = $request->phone;
+            // Update user basic info
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->phone = $request->phone;
 
-        // Update password if provided
-        if ($request->filled('password')) {
-            $user->password = Hash::make($request->password);
-        }
-
-        $user->save();
-
-        // Get or create profile
-        $profile = $user->profile;
-        if (!$profile) {
-            $profile = new \App\Models\Profile();
-            $profile->user_id = $user->id;
-        }
-
-        // Always save allergies/chronic_diseases as JSON array string
-        $profile->age = $request->age;
-        $profile->gender = $request->gender ?? '';
-        $profile->blood_type = $request->blood_type ?? '';
-
-        // Convert allergies to JSON array string if not empty
-        if (is_array($request->allergies)) {
-            $profile->allergies = json_encode($request->allergies);
-        } elseif ($request->allergies && $request->allergies !== "Aucune") {
-            // If it's a string, split and encode
-            $profile->allergies = json_encode(array_map('trim', explode(',', $request->allergies)));
-        } else {
-            $profile->allergies = json_encode(["Aucune"]);
-        }
-
-        // Convert chronic_diseases to JSON array string if not empty
-        if (is_array($request->chronic_diseases)) {
-            $profile->chronic_diseases = json_encode($request->chronic_diseases);
-        } elseif ($request->chronic_diseases && $request->chronic_diseases !== "Aucune") {
-            $profile->chronic_diseases = json_encode(array_map('trim', explode(',', $request->chronic_diseases)));
-        } else {
-            $profile->chronic_diseases = json_encode(["Aucune"]);
-        }
-
-        $profile->save();
-
-        // If this is a patient, also update patient_profile
-        if ($user->role_id == 1) { // Assuming 1 is the patient role ID
-            $patientProfile = $user->patientProfile;
-            if ($patientProfile) {
-                $patientProfile->age = $request->age;
-                $patientProfile->gender = $request->gender ?? '';
-                $patientProfile->blood_type = $request->blood_type ?? '';
-                $patientProfile->allergies = $request->allergies ?: 'Aucune';
-                $patientProfile->chronic_diseases = $request->chronic_diseases ?: 'Aucune';
-                $patientProfile->save();
+            // Update password if provided
+            if ($request->filled('password')) {
+                $user->password = Hash::make($request->password);
             }
-        }
 
-        // Update professional profiles based on role
-        $professionalProfile = null;
-        
-        if (in_array($user->role_id, [2, 4])) { // Medecin role ID
-            $professionalProfile = $user->medecinProfile;
-            if (!$professionalProfile) {
-                $professionalProfile = new \App\Models\MedecinProfile();
-                $professionalProfile->user_id = $user->id;
-            }
-        } elseif (in_array($user->role_id, [3])) { // Kine role ID
-            $professionalProfile = $user->kineProfile;
-            if (!$professionalProfile) {
-                $professionalProfile = new \App\Models\KineProfile();
-                $professionalProfile->user_id = $user->id;
-            }
-        } elseif (in_array($user->role_id, [5])) { // Orthophoniste role ID
-            $professionalProfile = $user->orthophonisteProfile;
-            if (!$professionalProfile) {
-                $professionalProfile = new \App\Models\OrthophonisteProfile();
-                $professionalProfile->user_id = $user->id;
-            }
-        } elseif (in_array($user->role_id, [6])) { // Psychologue role ID
-            $professionalProfile = $user->psychologueProfile;
-            if (!$professionalProfile) {
-                $professionalProfile = new \App\Models\PsychologueProfile();
-                $professionalProfile->user_id = $user->id;
-            }
-        }
+            $user->save();
 
-        if ($professionalProfile) {
-            // Update professional-specific fields
-            if ($request->filled('specialty')) {
-                $professionalProfile->specialty = $request->specialty;
+            // Get or create profile
+            $profile = $user->profile;
+            if (!$profile) {
+                $profile = new \App\Models\Profile();
+                $profile->user_id = $user->id;
             }
-            if ($request->filled('experience_years')) {
-                $professionalProfile->experience_years = $request->experience_years;
+
+            // Always save allergies/chronic_diseases as JSON array string
+            $profile->age = $request->age;
+            $profile->gender = $request->gender ?? '';
+            $profile->blood_type = $request->blood_type ?? '';
+
+            // Convert allergies to JSON array string if not empty
+            if (is_array($request->allergies)) {
+                $profile->allergies = json_encode($request->allergies);
+            } elseif ($request->allergies && $request->allergies !== "Aucune") {
+                // If it's a string, split and encode
+                $profile->allergies = json_encode(array_map('trim', explode(',', $request->allergies)));
+            } else {
+                $profile->allergies = json_encode(["Aucune"]);
             }
-            if ($request->filled('address')) {
-                $professionalProfile->adresse = $request->address;
+
+            // Convert chronic_diseases to JSON array string if not empty
+            if (is_array($request->chronic_diseases)) {
+                $profile->chronic_diseases = json_encode($request->chronic_diseases);
+            } elseif ($request->chronic_diseases && $request->chronic_diseases !== "Aucune") {
+                $profile->chronic_diseases = json_encode(array_map('trim', explode(',', $request->chronic_diseases)));
+            } else {
+                $profile->chronic_diseases = json_encode(["Aucune"]);
             }
-            if ($request->filled('ville')) {
-                $professionalProfile->ville = $request->ville;
+
+            $profile->save();
+
+            // If this is a patient, also update patient_profile
+            if ($user->role_id == 1) { // Assuming 1 is the patient role ID
+                $patientProfile = $user->patientProfile;
+                if ($patientProfile) {
+                    $patientProfile->age = $request->age;
+                    $patientProfile->gender = $request->gender ?? '';
+                    $patientProfile->blood_type = $request->blood_type ?? '';
+                    $patientProfile->allergies = $request->allergies ?: 'Aucune';
+                    $patientProfile->chronic_diseases = $request->chronic_diseases ?: 'Aucune';
+                    $patientProfile->save();
+                }
             }
-            if ($request->filled('presentation')) {
-                $professionalProfile->presentation = $request->presentation;
-            }
-            if ($request->filled('additional_info')) {
-                $professionalProfile->additional_info = $request->additional_info;
-            }
+
+            // Update professional profiles based on role
+            $professionalProfile = null;
             
-            // Handle separate time fields
-            if ($request->filled('horaire_start')) {
-                $professionalProfile->horaire_start = $request->horaire_start;
-            }
-            if ($request->filled('horaire_end')) {
-                $professionalProfile->horaire_end = $request->horaire_end;
-            }
-            
-            // Keep backward compatibility with horaires JSON
-            if ($request->filled('horaire_start') && $request->filled('horaire_end')) {
-                $professionalProfile->horaires = json_encode([
-                    'start' => $request->horaire_start,
-                    'end' => $request->horaire_end
-                ]);
-            }
-
-            // Handle working days, transport, and payment methods
-            if ($request->has('jours_disponibles')) {
-                $professionalProfile->jours_disponibles = $request->jours_disponibles;
-            }
-            if ($request->has('moyens_transport')) {
-                $professionalProfile->moyens_transport = $request->moyens_transport;
-            }
-            if ($request->has('moyens_paiement')) {
-                $professionalProfile->moyens_paiement = $request->moyens_paiement;
-            }
-            if ($request->filled('informations_pratiques')) {
-                $professionalProfile->informations_pratiques = $request->informations_pratiques;
-            }
-            if ($request->filled('contact_urgence')) {
-                $professionalProfile->contact_urgence = $request->contact_urgence;
+            if (in_array($user->role_id, [2, 4])) { // Medecin role ID
+                $professionalProfile = $user->medecinProfile;
+                if (!$professionalProfile) {
+                    $professionalProfile = new \App\Models\MedecinProfile();
+                    $professionalProfile->user_id = $user->id;
+                }
+            } elseif (in_array($user->role_id, [3])) { // Kine role ID
+                $professionalProfile = $user->kineProfile;
+                if (!$professionalProfile) {
+                    $professionalProfile = new \App\Models\KineProfile();
+                    $professionalProfile->user_id = $user->id;
+                }
+            } elseif (in_array($user->role_id, [5])) { // Orthophoniste role ID
+                $professionalProfile = $user->orthophonisteProfile;
+                if (!$professionalProfile) {
+                    $professionalProfile = new \App\Models\OrthophonisteProfile();
+                    $professionalProfile->user_id = $user->id;
+                }
+            } elseif (in_array($user->role_id, [6])) { // Psychologue role ID
+                $professionalProfile = $user->psychologueProfile;
+                if (!$professionalProfile) {
+                    $professionalProfile = new \App\Models\PsychologueProfile();
+                    $professionalProfile->user_id = $user->id;
+                }
             }
 
-            $professionalProfile->save();
-        }
+            if ($professionalProfile) {
+                // Update professional-specific fields
+                if ($request->filled('specialty')) {
+                    $professionalProfile->specialty = $request->specialty;
+                }
+                if ($request->filled('experience_years')) {
+                    $professionalProfile->experience_years = $request->experience_years;
+                }
+                if ($request->filled('address')) {
+                    $professionalProfile->adresse = $request->address;
+                }
+                if ($request->filled('ville')) {
+                    $professionalProfile->ville = $request->ville;
+                }
+                if ($request->filled('presentation')) {
+                    $professionalProfile->presentation = $request->presentation;
+                }
+                if ($request->filled('additional_info')) {
+                    $professionalProfile->additional_info = $request->additional_info;
+                }
+                
+                // Handle separate time fields
+                if ($request->filled('horaire_start')) {
+                    $professionalProfile->horaire_start = $request->horaire_start;
+                }
+                if ($request->filled('horaire_end')) {
+                    $professionalProfile->horaire_end = $request->horaire_end;
+                }
+                
+                // Keep backward compatibility with horaires JSON
+                if ($request->filled('horaire_start') && $request->filled('horaire_end')) {
+                    $professionalProfile->horaires = json_encode([
+                        'start' => $request->horaire_start,
+                        'end' => $request->horaire_end
+                    ]);
+                }
 
-        // Log what was updated
-        \Log::info('Profile updated:', [
-            'user_id' => $user->id,
-            'profile_data' => [
-                'age' => $profile->age,
-                'gender' => $profile->gender,
-                'blood_type' => $profile->blood_type,
-            ],
-            'patient_profile' => $user->patientProfile ? [
-                'age' => $user->patientProfile->age,
-                'gender' => $user->patientProfile->gender,
-                'blood_type' => $user->patientProfile->blood_type,
-            ] : null
-        ]);
+                // Handle working days, transport, and payment methods
+                if ($request->has('jours_disponibles')) {
+                    $professionalProfile->jours_disponibles = $request->jours_disponibles;
+                }
+                if ($request->has('moyens_transport')) {
+                    $professionalProfile->moyens_transport = $request->moyens_transport;
+                }
+                if ($request->has('moyens_paiement')) {
+                    $professionalProfile->moyens_paiement = $request->moyens_paiement;
+                }
+                if ($request->filled('informations_pratiques')) {
+                    $professionalProfile->informations_pratiques = $request->informations_pratiques;
+                }
+                if ($request->filled('contact_urgence')) {
+                    $professionalProfile->contact_urgence = $request->contact_urgence;
+                }
 
-        // Load appropriate profiles for response
-        $profileRelations = ['profile', 'patientProfile'];
-        if (in_array($user->role_id, [2, 4])) {
-            $profileRelations[] = 'medecinProfile';
-        }
-        if (in_array($user->role_id, [3])) {
-            $profileRelations[] = 'kineProfile';
-        }
-        if (in_array($user->role_id, [5])) {
-            $profileRelations[] = 'orthophonisteProfile';
-        }
-        if (in_array($user->role_id, [6])) {
-            $profileRelations[] = 'psychologueProfile';
-        }
+                $professionalProfile->save();
+            }
 
-        return response()->json([
-            'message' => 'Profile updated successfully',
-            'user' => $user->fresh()->load($profileRelations)
-        ]);
+            // Log what was updated
+            \Log::info('Profile updated:', [
+                'user_id' => $user->id,
+                'profile_data' => $user->profile ? [
+                    'age' => $user->profile->age,
+                    'gender' => $user->profile->gender,
+                    'blood_type' => $user->profile->blood_type,
+                ] : null,
+                'patient_profile' => $user->patientProfile ? [
+                    'age' => $user->patientProfile->age,
+                    'gender' => $user->patientProfile->gender,
+                    'blood_type' => $user->patientProfile->blood_type,
+                ] : null
+            ]);
+
+            // Load appropriate profiles for response
+            $profileRelations = ['profile', 'patientProfile'];
+            if (in_array($user->role_id, [2, 4])) {
+                $profileRelations[] = 'medecinProfile';
+            }
+            if (in_array($user->role_id, [3])) {
+                $profileRelations[] = 'kineProfile';
+            }
+            if (in_array($user->role_id, [5])) {
+                $profileRelations[] = 'orthophonisteProfile';
+            }
+            if (in_array($user->role_id, [6])) {
+                $profileRelations[] = 'psychologueProfile';
+            }
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'user' => $user->fresh()->load($profileRelations)
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error updating profile: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'request_data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['error' => 'Failed to update profile: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -412,12 +421,16 @@ class UserController extends Controller
                 // Add profile data directly to user object for easier frontend access
                 $profileData = null;
                 $ville = null;
+                $isInVacationMode = false;
                 
                 try {
                     if ($user->medecinProfile) {
                         $profileData = $user->medecinProfile->toArray();
                         // Remove sensitive data - do NOT include carte_professionnelle
                         unset($profileData['carte_professionnelle']);
+                        
+                        // Check vacation mode (using disponible column - inverse logic)
+                        $isInVacationMode = !($user->medecinProfile->disponible ?? true);
                         
                         // Decode JSON fields for frontend display
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
@@ -435,6 +448,9 @@ class UserController extends Controller
                         $profileData = $user->kineProfile->toArray();
                         unset($profileData['carte_professionnelle']);
                         
+                        // Check vacation mode (using disponible column - inverse logic)
+                        $isInVacationMode = !($user->kineProfile->disponible ?? true);
+                        
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
                         }
@@ -446,6 +462,9 @@ class UserController extends Controller
                     } elseif ($user->orthophonisteProfile) {
                         $profileData = $user->orthophonisteProfile->toArray();
                         unset($profileData['carte_professionnelle']);
+                        
+                        // Check vacation mode (using disponible column - inverse logic)
+                        $isInVacationMode = !($user->orthophonisteProfile->disponible ?? true);
                         
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
@@ -459,6 +478,9 @@ class UserController extends Controller
                         $profileData = $user->psychologueProfile->toArray();
                         unset($profileData['carte_professionnelle']);
                         
+                        // Check vacation mode (using disponible column - inverse logic)
+                        $isInVacationMode = !($user->psychologueProfile->disponible ?? true);
+                        
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
                         }
@@ -469,18 +491,23 @@ class UserController extends Controller
                         $ville = $user->psychologueProfile->ville ?? null;
                     } elseif ($user->cliniqueProfile) {
                         $profileData = $user->cliniqueProfile->toArray();
+                        $isInVacationMode = !($user->cliniqueProfile->disponible ?? true);
                         $ville = $user->cliniqueProfile->ville ?? null;
                     } elseif ($user->pharmacieProfile) {
                         $profileData = $user->pharmacieProfile->toArray();
+                        $isInVacationMode = !($user->pharmacieProfile->disponible ?? true);
                         $ville = $user->pharmacieProfile->ville ?? null;
                     } elseif ($user->parapharmacieProfile) {
                         $profileData = $user->parapharmacieProfile->toArray();
+                        $isInVacationMode = !($user->parapharmacieProfile->disponible ?? true);
                         $ville = $user->parapharmacieProfile->ville ?? null;
                     } elseif ($user->laboAnalyseProfile) {
                         $profileData = $user->laboAnalyseProfile->toArray();
+                        $isInVacationMode = !($user->laboAnalyseProfile->disponible ?? true);
                         $ville = $user->laboAnalyseProfile->ville ?? null;
                     } elseif ($user->centreRadiologieProfile) {
                         $profileData = $user->centreRadiologieProfile->toArray();
+                        $isInVacationMode = !($user->centreRadiologieProfile->disponible ?? true);
                         $ville = $user->centreRadiologieProfile->ville ?? null;
                     }
                 } catch (\Exception $e) {
@@ -490,26 +517,37 @@ class UserController extends Controller
                     ]);
                 }
                 
+                // Skip users in vacation mode from search results
+                if ($isInVacationMode) {
+                    return null;
+                }
+                
                 // Add ville and profile data to main user object
                 $user->ville = $ville;
                 $user->profile_data = $profileData;
                 
-                // Add distance calculation for proximity search
-                if ($latitude && $longitude && $ville) {
-                    $user->distance = null; // Placeholder for distance calculation
+                // Calculate distance if coordinates are provided
+                if ($latitude && $longitude && $profileData && isset($profileData['latitude']) && isset($profileData['longitude'])) {
+                    $distance = $this->calculateDistance($latitude, $longitude, $profileData['latitude'], $profileData['longitude']);
+                    $user->distance = $distance;
                 }
                 
                 return $user;
             })
             ->filter(function($user) use ($latitude, $longitude, $radius) {
+                // Filter out null users (those in vacation mode)
+                if ($user === null) {
+                    return false;
+                }
+                
                 // Only return users that have a ville (city) set
                 if (empty($user->ville)) {
                     return false;
                 }
                 
-                // For proximity search, return all users for now
-                if ($latitude && $longitude) {
-                    return true;
+                // If coordinates and radius are provided, filter by distance
+                if ($latitude && $longitude && $radius && isset($user->distance)) {
+                    return $user->distance <= $radius;
                 }
                 
                 return true;
@@ -519,9 +557,7 @@ class UserController extends Controller
             return response()->json([
                 'data' => $processedUsers->toArray(),
                 'count' => $processedUsers->count()
-            ])->header('Cache-Control', 'no-cache, no-store, must-revalidate')
-              ->header('Pragma', 'no-cache')
-              ->header('Expires', '0');
+            ]);
         } catch (\Exception $e) {
             \Log::error('Error in public search: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),

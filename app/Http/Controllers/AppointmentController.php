@@ -227,6 +227,27 @@ class AppointmentController extends Controller
 
         $doctor = User::findOrFail($request->target_user_id);
 
+        // Check if professional is available (not in vacation mode)
+        $professionalProfile = null;
+        $roleMap = [
+            'medecin' => 'medecinProfile',
+            'kine' => 'kineProfile', 
+            'orthophoniste' => 'orthophonisteProfile',
+            'psychologue' => 'psychologueProfile'
+        ];
+        
+        if (isset($roleMap[$request->target_role])) {
+            $doctor->load($roleMap[$request->target_role]);
+            $professionalProfile = $doctor->{$roleMap[$request->target_role]};
+        }
+        
+        if ($professionalProfile && $professionalProfile->disponible === false) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce professionnel est actuellement en vacances et n\'accepte pas de nouveaux rendez-vous.'
+            ], 400);
+        }
+
         // Parse date_time with multiple possible formats
         try {
             // Try multiple formats: with seconds or without
@@ -357,6 +378,29 @@ class AppointmentController extends Controller
         }
 
         $organization = User::findOrFail($request->organization_id);
+
+        // Check if organization is available (not in vacation mode)
+        $organizationProfile = null;
+        $orgRoleMap = [
+            'clinique' => 'cliniqueProfile',
+            'pharmacie' => 'pharmacieProfile',
+            'parapharmacie' => 'parapharmacieProfile',
+            'labo_analyse' => 'laboAnalyseProfile',
+            'centre_radiologie' => 'centreRadiologieProfile'
+        ];
+        
+        $orgRole = $organization->role->name ?? '';
+        if (isset($orgRoleMap[$orgRole])) {
+            $organization->load($orgRoleMap[$orgRole]);
+            $organizationProfile = $organization->{$orgRoleMap[$orgRole]};
+        }
+        
+        if ($organizationProfile && $organizationProfile->disponible === false) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cet établissement est actuellement fermé et n\'accepte pas de nouveaux rendez-vous.'
+            ], 400);
+        }
 
         // Check if appointment slot is still available
         $dateTime = Carbon::parse($request->date . ' ' . $request->time);

@@ -16,6 +16,7 @@ use App\Http\Controllers\MedecinController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\StripeController;
 use App\Http\Controllers\StatisticsController;
+use App\Http\Controllers\ProfessionalProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -61,11 +62,22 @@ Route::middleware('auth:sanctum')->group(function () {
     // User info
     Route::get('/user', [UserController::class, 'user']);
     
-    // User profile
+    // User profile (for patients only)
     Route::get('/user/profile', [UserController::class, 'profile']);
     Route::put('/user/profile', [UserController::class, 'updateProfile']);
     Route::post('/user/profile/update', [UserController::class, 'updateProfile']); // <-- ADD THIS LINE
     Route::post('/user/profile/update-avatar', [UserController::class, 'updateProfileAvatar']);
+
+    // Professional and Organization profile routes
+    Route::prefix('professional')->group(function () {
+        Route::get('/profile', [ProfessionalProfileController::class, 'getProfile']);
+        Route::post('/profile/update', [ProfessionalProfileController::class, 'updateProfile']);
+        Route::put('/profile/update', [ProfessionalProfileController::class, 'updateProfile']);
+        Route::post('/profile/update-image', [ProfessionalProfileController::class, 'updateProfileImage']);
+        Route::post('/profile/toggle-availability', [ProfessionalProfileController::class, 'toggleAvailability']);
+        Route::post('/profile/set-absence', [ProfessionalProfileController::class, 'setAbsence']);
+        Route::post('/profile/toggle-vacation-mode', [ProfessionalProfileController::class, 'toggleVacationMode']);
+    });
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
