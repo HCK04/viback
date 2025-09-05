@@ -44,6 +44,12 @@ return new class extends Migration
             if (!Schema::hasColumn('centre_radiologie_profiles', 'contact_urgence')) {
                 $table->string('contact_urgence')->nullable();
             }
+            if (!Schema::hasColumn('centre_radiologie_profiles', 'org_presentation')) {
+                $table->text('org_presentation')->nullable();
+            }
+            if (!Schema::hasColumn('centre_radiologie_profiles', 'services_description')) {
+                $table->text('services_description')->nullable();
+            }
         });
     }
 

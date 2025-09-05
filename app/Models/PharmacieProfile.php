@@ -24,7 +24,17 @@ class PharmacieProfile extends Model
         'presentation',
         'additional_info',
         'services',
-        // NEW PROFILE FIELDS
+        'profile_image',
+        'etablissement_image',
+        'rating',
+        'description',
+        'org_presentation',
+        'services_description',
+        'vacation_mode',
+        'vacation_auto_reactivate_date',
+        'gallery',
+        'responsable_name',
+        'guard',
         'moyens_paiement',
         'moyens_transport',
         'informations_pratiques',
@@ -38,7 +48,8 @@ class PharmacieProfile extends Model
         'services' => 'array',
         'moyens_paiement' => 'array',
         'moyens_transport' => 'array',
-        'jours_disponibles' => 'array'
+        'jours_disponibles' => 'array',
+        'gallery' => 'array'
     ];
     
     public function user() {

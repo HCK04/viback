@@ -20,6 +20,7 @@ class CliniqueProfile extends Model
         'horaire_end',
         'nbr_personnel',
         'gerant_name',
+        'responsable_name',
         'services',
         'disponible',
         'absence_start_date',
@@ -31,7 +32,19 @@ class CliniqueProfile extends Model
         'moyens_transport',
         'informations_pratiques',
         'jours_disponibles',
-        'contact_urgence'
+        'contact_urgence',
+        // CLINIC SPECIFIC FIELDS
+        'clinic_presentation',
+        'clinic_services_description',
+        'description',
+        'org_presentation',
+        'services_description',
+        'etablissement_image',
+        'profile_image',
+        'rating',
+        'vacation_mode',
+        'vacation_auto_reactivate_date',
+        'gallery'
     ];
 
     // Add this to handle JSON data

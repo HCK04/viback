@@ -14,9 +14,12 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SiteStatsController;
 use App\Http\Controllers\MedecinController;
 use App\Http\Controllers\OrganisationController;
+use App\Http\Controllers\OrganizationApiController;
 use App\Http\Controllers\StripeController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\ProfessionalProfileController;
+use App\Http\Controllers\PharmacyApiController;
+use App\Http\Controllers\PharmacyProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -32,6 +35,7 @@ use App\Http\Controllers\ProfessionalProfileController;
 // Public routes
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/register', [RegisterController::class, 'register']);
+Route::post('/organizations/register', [OrganizationApiController::class, 'register']);
 Route::post('/check-email', [EmailCheckController::class, 'check']);
 Route::post('/check-availability', [ValidationController::class, 'checkAvailability']);
 Route::get('/annonces', [AnnonceController::class, 'publicIndex']);
@@ -39,6 +43,14 @@ Route::get('/annonces/{id}', [AnnonceController::class, 'show']);
 // NEW: make site stats public
 Route::get('/site-stats', [SiteStatsController::class, 'getStats']);
 Route::post('/site-stats/bump', [SiteStatsController::class, 'bump']);
+
+// Pharmacy routes (public - no authentication required)
+Route::prefix('pharmacies')->group(function () {
+    Route::get('/', [PharmacyApiController::class, 'index']);
+    Route::get('/search', [PharmacyApiController::class, 'searchByCity']);
+    Route::get('/{id}', [PharmacyApiController::class, 'show']);
+    Route::get('/slug/{slug}', [PharmacyApiController::class, 'showBySlug']);
+});
 
 // Statistics routes for auto-incrementing counters
 Route::get('/statistics', [StatisticsController::class, 'getStatistics']);
@@ -48,14 +60,25 @@ Route::post('/statistics/reset', [StatisticsController::class, 'resetStatistics'
 Route::get('/users', [UserController::class, 'publicSearch']);
 Route::get('/medecins', [MedecinController::class, 'publicIndex']);
 Route::get('/medecins/{id}', [MedecinController::class, 'publicShow']);
-Route::get('/organisations', [OrganisationController::class, 'index']);
-Route::get('/organisations/{id}', [OrganisationController::class, 'publicShow']);
+Route::get('/organizations', [OrganizationApiController::class, 'index']);
+Route::get('/organizations/search', [OrganizationApiController::class, 'search']);
+Route::get('/organizations/{id}', [OrganizationApiController::class, 'show']);
 Route::get('/users/{id}', [UserController::class, 'publicShow']);
 
 // Universal profile endpoints - auto-detect profile type
 Route::get('/profiles/{id}', [App\Http\Controllers\ProfileController::class, 'show']);
 Route::get('/professionals/{id}', [App\Http\Controllers\ProfessionalController::class, 'show']);
+
+// Clinic-specific API endpoints
+Route::get('/clinics', [App\Http\Controllers\ClinicController::class, 'index']);
+Route::get('/clinics/search', [App\Http\Controllers\ClinicController::class, 'searchByCity']);
+Route::get('/clinics/{id}', [App\Http\Controllers\ClinicController::class, 'show']);
 Route::get('/rendezvous/professional/{id}', [App\Http\Controllers\RendezVousController::class, 'getProfessionalData']);
+
+// Pharmacy-specific API endpoints
+Route::get('/pharmacies', [App\Http\Controllers\PharmacyApiController::class, 'index']);
+Route::get('/pharmacies/{id}', [App\Http\Controllers\PharmacyApiController::class, 'show']);
+Route::get('/pharmacies/search/city', [App\Http\Controllers\PharmacyApiController::class, 'searchByCity']);
 
 // Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -78,6 +101,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/profile/set-absence', [ProfessionalProfileController::class, 'setAbsence']);
         Route::post('/profile/toggle-vacation-mode', [ProfessionalProfileController::class, 'toggleVacationMode']);
     });
+
+    // Pharmacy profile routes (authenticated)
+    Route::prefix('pharmacy')->group(function () {
+        Route::get('/profile', [PharmacyProfileController::class, 'profile']);
+        Route::post('/profile/update', [PharmacyProfileController::class, 'updateProfile']);
+        Route::put('/profile/update', [PharmacyProfileController::class, 'updateProfile']);
+    });
+
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -110,8 +141,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Medecins
     Route::get('/medecins', [MedecinController::class, 'index']);
 
-    // Organisations (authenticated)
-    Route::get('/organisations/debug', [OrganisationController::class, 'debug']);
+    // Organizations (authenticated)
+    Route::put('/organizations/{id}', [OrganizationApiController::class, 'update']);
 
     // Appointment booking routes (aliases for rendezvous)
     Route::post('/rendezvous', [AppointmentController::class, 'store']);

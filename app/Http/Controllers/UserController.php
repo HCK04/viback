@@ -25,9 +25,9 @@ class UserController extends Controller
      */
     public function profile()
     {
-        $user = auth()->user();
-        
-        // Ensure user has a profile
+        $user = auth()->user()->load('role');
+
+        // Ensure standard patient profile exists (kept for non-organization roles)
         if (!$user->profile) {
             $user->profile()->create([
                 'allergies' => 'Aucune',
@@ -37,25 +37,112 @@ class UserController extends Controller
                 'age' => null
             ]);
         }
-        
-        // Add debugging
-        \Log::info('User profile data:', [
-            'user_id' => $user->id,
-            'role_id' => $user->role_id,
-            'medecin_profile' => $user->medecinProfile ? [
-                'id' => $user->medecinProfile->id,
-                'specialty' => $user->medecinProfile->specialty,
-                'experience_years' => $user->medecinProfile->experience_years,
-                'adresse' => $user->medecinProfile->adresse,
-                'horaires' => $user->medecinProfile->horaires,
-            ] : null
-        ]);
-        
-        // Load all profile types based on user role
-        $profileRelations = ['profile', 'patientProfile'];
-        
-        // Add professional profiles based on role
-        // Check multiple role IDs that could be professionals
+
+        // If user is an organization, flatten org profile under unified 'profile' key
+        try {
+            $roleName = $user->role->name ?? null;
+            $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
+
+            if ($roleName && in_array($roleName, $orgTypes)) {
+                // Map role to relation and name field
+                $relation = null; $nameField = null;
+                if ($roleName === 'clinique') { $relation = 'cliniqueProfile'; $nameField = 'nom_clinique'; }
+                elseif ($roleName === 'pharmacie') { $relation = 'pharmacieProfile'; $nameField = 'nom_pharmacie'; }
+                elseif ($roleName === 'parapharmacie') { $relation = 'parapharmacieProfile'; $nameField = 'nom_parapharmacie'; }
+                elseif ($roleName === 'labo_analyse') { $relation = 'laboAnalyseProfile'; $nameField = 'nom_labo'; }
+                elseif ($roleName === 'centre_radiologie') { $relation = 'centreRadiologieProfile'; $nameField = 'nom_centre'; }
+
+                $user->load($relation);
+                $profile = $user->{$relation};
+
+                if (!$profile) {
+                    return response()->json([
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'phone' => $user->phone,
+                        'role' => $user->role,
+                        'profile' => null,
+                    ]);
+                }
+
+                // Decode helper
+                $decode = function ($value) {
+                    if (is_null($value)) return [];
+                    if (is_array($value)) return $value;
+                    if (is_string($value)) {
+                        $decoded = json_decode($value, true);
+                        return $decoded !== null ? $decoded : $value;
+                    }
+                    return $value;
+                };
+
+                $flat = [
+                    'id' => $user->id,
+                    'name' => $profile->{$nameField} ?? $user->name,
+                    'type' => $roleName,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'adresse' => $profile->adresse,
+                    'ville' => $profile->ville,
+                    'location' => $profile->adresse,
+                    'rating' => $profile->rating ?? 0,
+                    'description' => $profile->description,
+                    'org_presentation' => $profile->org_presentation,
+                    'services_description' => $profile->services_description,
+                    'additional_info' => $profile->additional_info,
+                    'presentation' => $profile->presentation,
+                    'clinic_presentation' => $profile->clinic_presentation,
+                    'clinic_services_description' => $profile->clinic_services_description,
+                    'informations_pratiques' => $profile->informations_pratiques,
+                    'contact_urgence' => $profile->contact_urgence,
+                    'etablissement_image' => $profile->etablissement_image,
+                    'profile_image' => $profile->profile_image,
+                    'gallery' => $decode($profile->gallery) ?: [],
+                    'horaires' => [
+                        'start' => $profile->horaire_start,
+                        'end' => $profile->horaire_end
+                    ],
+                    'horaire_start' => $profile->horaire_start,
+                    'horaire_end' => $profile->horaire_end,
+                    'services' => $decode($profile->services) ?: [],
+                    'moyens_paiement' => $decode($profile->moyens_paiement) ?: [],
+                    'moyens_transport' => $decode($profile->moyens_transport) ?: [],
+                    'jours_disponibles' => $decode($profile->jours_disponibles) ?: [],
+                    'responsable_name' => $profile->responsable_name,
+                    'gerant_name' => $profile->gerant_name ?? null,
+                    'disponible' => $profile->disponible,
+                    'vacation_mode' => $profile->vacation_mode ?? false,
+                    'absence_start_date' => $profile->absence_start_date,
+                    'absence_end_date' => $profile->absence_end_date,
+                    'is_verified' => $user->is_verified,
+                    'created_at' => $profile->created_at,
+                    'updated_at' => $profile->updated_at,
+                    'nom_clinique' => $profile->nom_clinique ?? null,
+                    'nom_pharmacie' => $profile->nom_pharmacie ?? null,
+                    'nom_parapharmacie' => $profile->nom_parapharmacie ?? null,
+                    'nom_labo' => $profile->nom_labo ?? null,
+                    'nom_centre' => $profile->nom_centre ?? null,
+                ];
+
+                return response()->json([
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'role' => $user->role,
+                    'profile' => $flat,
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error building organization profile: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+            ]);
+        }
+
+        // Non-organization: load standard relations + role
+        $profileRelations = ['role', 'profile', 'patientProfile'];
+
         if (in_array($user->role_id, [2, 4])) { // Medecin role
             $profileRelations[] = 'medecinProfile';
         }
@@ -68,7 +155,7 @@ class UserController extends Controller
         if (in_array($user->role_id, [6])) { // Psychologue role
             $profileRelations[] = 'psychologueProfile';
         }
-        
+
         return response()->json($user->load($profileRelations));
     }
 
@@ -118,6 +205,14 @@ class UserController extends Controller
     {
         try {
             $user = auth()->user();
+
+            // If organization user, delegate to OrganizationApiController to handle canonical update
+            $user->load('role');
+            $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
+            if (($user->role->name ?? null) && in_array($user->role->name, $orgTypes)) {
+                $orgController = new OrganizationApiController();
+                return $orgController->update($request, $user->id);
+            }
 
             $request->validate([
                 'name' => 'required|string|max:255',

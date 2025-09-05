@@ -102,6 +102,14 @@ class RegisterController extends Controller
                 throw new \Exception('Role not found');
             }
 
+            // Handle organization registration - redirect to new API
+            if (in_array($role->name, ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'])) {
+                DB::rollBack(); // Rollback current transaction
+                // Use the new OrganizationApiController for organization registration
+                $organizationController = new \App\Http\Controllers\OrganizationApiController();
+                return $organizationController->register($request);
+            }
+
             // Handle profile creation based on role
             switch ($role->name) {
                 case 'patient':
@@ -326,198 +334,7 @@ class RegisterController extends Controller
                     $modelClass::create($profileData);
                     break;
 
-                case 'clinique':
-                    // Log incoming data for debugging
-                    \Log::info('Clinic registration data:', [
-                        'ville' => $request->ville,
-                        'responsable_name' => $request->responsable_name,
-                        'description' => $request->description,
-                        'org_presentation' => $request->org_presentation,
-                        'services_description' => $request->services_description,
-                        'additional_info' => $request->additional_info,
-                        'all_request' => $request->all()
-                    ]);
-
-                    // Handle etablissement image upload
-                    $etablissementImagePath = null;
-                    if ($request->hasFile('etablissement_image')) {
-                        $file = $request->file('etablissement_image');
-                        $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                        $path = $file->storeAs('public/etablissements', $filename);
-                        $etablissementImagePath = str_replace('public/', '', $path);
-                    }
-
-                    // Process services data
-                    $servicesData = [];
-                    if ($request->has('services')) {
-                        $servicesData = json_decode($request->services, true);
-                        
-                        // Handle "Autres" option with custom service
-                        if (is_array($servicesData) && in_array("Autres", $servicesData) && $request->has('other_service')) {
-                            // Remove "Autres" from the array
-                            $servicesData = array_filter($servicesData, function($item) {
-                                return $item !== "Autres";
-                            });
-                            // Add the custom service
-                            $servicesData[] = $request->other_service;
-                        }
-                    }
-
-                    $clinicData = [
-                        'user_id' => $user->id,
-                        'nom_clinique' => $request->nom_etablissement,
-                        'responsable_name' => $request->responsable_name,
-                        'adresse' => $request->adresse,
-                        'ville' => $request->ville,
-                        'horaire_start' => $request->horaire_start,
-                        'horaire_end' => $request->horaire_end,
-                        'services' => json_encode($servicesData),
-                        'profile_image' => null,
-                        'etablissement_image' => $etablissementImagePath,
-                        'rating' => 0.0,
-                        'description' => $request->description,
-                        'vacation_mode' => false,
-                        'vacation_auto_reactivate_date' => null,
-                        'disponible' => true
-                    ];
-
-                    // Add clinic profile fields from Auth.jsx form (removed unused fields)
-                    if ($request->has('services_description')) {
-                        $clinicData['services_description'] = $request->services_description;
-                    }
-                    if ($request->has('additional_info')) {
-                        $clinicData['additional_info'] = $request->additional_info;
-                    }
-                    if ($request->has('informations_pratiques')) {
-                        $clinicData['informations_pratiques'] = $request->informations_pratiques;
-                    }
-                    if ($request->has('contact_urgence')) {
-                        $clinicData['contact_urgence'] = $request->contact_urgence;
-                    }
-                    if ($request->has('presentation')) {
-                        $clinicData['presentation'] = $request->presentation;
-                    }
-                    
-                    // Add array fields
-                    if ($request->has('moyens_paiement')) {
-                        $clinicData['moyens_paiement'] = $request->moyens_paiement ? json_encode($request->moyens_paiement, JSON_UNESCAPED_UNICODE) : null;
-                    }
-                    if ($request->has('moyens_transport')) {
-                        $clinicData['moyens_transport'] = $request->moyens_transport ? json_encode($request->moyens_transport, JSON_UNESCAPED_UNICODE) : null;
-                    }
-                    if ($request->has('jours_disponibles')) {
-                        $clinicData['jours_disponibles'] = $request->jours_disponibles ? json_encode($request->jours_disponibles, JSON_UNESCAPED_UNICODE) : null;
-                    }
-
-                    \Log::info('Clinic data to be saved:', $clinicData);
-                    
-                    $clinic = CliniqueProfile::create($clinicData);
-                    \Log::info('Clinic created with ID:', ['id' => $clinic->id]);
-                    break;
-
-                case 'pharmacie':
-                case 'parapharmacie':
-                case 'labo_analyse':
-                case 'centre_radiologie':
-                    $modelClass = 'App\\Models\\' . str_replace('_', '', ucfirst($role->name)) . 'Profile';
-
-                    // Handle etablissement image upload
-                    $etablissementImagePath = null;
-                    if ($request->hasFile('etablissement_image')) {
-                        $file = $request->file('etablissement_image');
-                        $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                        $path = $file->storeAs('public/etablissements', $filename);
-                        $etablissementImagePath = str_replace('public/', '', $path);
-                    }
-
-                    // Process services data
-                    $servicesData = [];
-                    if ($request->has('services')) {
-                        $servicesData = json_decode($request->services, true);
-                        
-                        // Handle "Autres" option with custom service
-                        if (is_array($servicesData) && in_array("Autres", $servicesData) && $request->has('other_service')) {
-                            // Remove "Autres" from the array
-                            $servicesData = array_filter($servicesData, function($item) {
-                                return $item !== "Autres";
-                            });
-                            // Add the custom service
-                            $servicesData[] = $request->other_service;
-                        }
-                    }
-
-                    $profileData = [
-                        'user_id' => $user->id,
-                        'adresse' => $request->adresse,
-                        'ville' => $request->ville,
-                        'horaire_start' => $request->horaire_start,
-                        'horaire_end' => $request->horaire_end,
-                        'etablissement_image' => $etablissementImagePath,
-                        'rating' => 0.0,
-                        'disponible' => true
-                    ];
-
-                    // Add common organization profile fields
-                    if ($request->has('presentation')) {
-                        $profileData['presentation'] = $request->presentation;
-                    }
-                    if ($request->has('additional_info')) {
-                        $profileData['additional_info'] = $request->additional_info;
-                    }
-                    if ($request->has('moyens_paiement')) {
-                        $profileData['moyens_paiement'] = $request->moyens_paiement ? json_encode($request->moyens_paiement, JSON_UNESCAPED_UNICODE) : null;
-                    }
-                    if ($request->has('moyens_transport')) {
-                        $profileData['moyens_transport'] = $request->moyens_transport ? json_encode($request->moyens_transport, JSON_UNESCAPED_UNICODE) : null;
-                    }
-                    if ($request->has('informations_pratiques')) {
-                        $profileData['informations_pratiques'] = $request->informations_pratiques;
-                    }
-                    if ($request->has('jours_disponibles')) {
-                        $profileData['jours_disponibles'] = $request->jours_disponibles ? json_encode($request->jours_disponibles, JSON_UNESCAPED_UNICODE) : null;
-                    }
-                    if ($request->has('contact_urgence')) {
-                        $profileData['contact_urgence'] = $request->contact_urgence;
-                    }
-                    
-                    // Add specific fields based on organization type
-                    if (in_array($role->name, ['pharmacie', 'labo_analyse'])) {
-                        if ($request->has('description')) {
-                            $profileData['description'] = $request->description;
-                        }
-                        if ($request->has('org_presentation')) {
-                            $profileData['org_presentation'] = $request->org_presentation;
-                        }
-                        if ($request->has('services_description')) {
-                            $profileData['services_description'] = $request->services_description;
-                        }
-                        $profileData['responsable_name'] = $request->responsable_name;
-                        $profileData['profile_image'] = null; // Can be added later
-                        $profileData['vacation_mode'] = false;
-                        $profileData['gallery'] = null;
-                    }
-
-                    // Handle organization-specific fields
-                    if ($role->name === 'labo_analyse') {
-                        $profileData['nom_labo'] = $request->nom_etablissement;
-                        $profileData['gerant_name'] = $request->responsable_name;
-                        $profileData['services'] = json_encode($servicesData);
-                    } elseif ($role->name === 'centre_radiologie') {
-                        $profileData['nom_centre'] = $request->nom_etablissement;
-                        $profileData['gerant_name'] = $request->responsable_name;
-                        $profileData['services'] = json_encode($servicesData);
-                    } elseif ($role->name === 'pharmacie') {
-                        $profileData['nom_pharmacie'] = $request->nom_etablissement;
-                        $profileData['gerant_name'] = $request->responsable_name;
-                        $profileData['services'] = json_encode($servicesData);
-                    } elseif ($role->name === 'parapharmacie') {
-                        $profileData['nom_parapharmacie'] = $request->nom_etablissement;
-                        $profileData['gerant_name'] = $request->responsable_name;
-                        $profileData['services'] = json_encode($servicesData);
-                    }
-
-                    $modelClass::create($profileData);
-                    break;
+                // Organization cases are now handled by the new API above
             }
 
 

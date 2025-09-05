@@ -44,6 +44,12 @@ return new class extends Migration
             if (!Schema::hasColumn('clinique_profiles', 'contact_urgence')) {
                 $table->string('contact_urgence')->nullable();
             }
+            if (!Schema::hasColumn('clinique_profiles', 'org_presentation')) {
+                $table->text('org_presentation')->nullable();
+            }
+            if (!Schema::hasColumn('clinique_profiles', 'services_description')) {
+                $table->text('services_description')->nullable();
+            }
         });
     }
 
@@ -65,7 +71,9 @@ return new class extends Migration
                 'moyens_transport',
                 'informations_pratiques',
                 'jours_disponibles',
-                'contact_urgence'
+                'contact_urgence',
+                'org_presentation',
+                'services_description'
             ]);
         });
     }

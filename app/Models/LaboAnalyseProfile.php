@@ -23,7 +23,18 @@ class LaboAnalyseProfile extends Model
         'absence_start_date',
         'absence_end_date',
         'presentation',
+        'description',
+        'org_presentation',
+        'services_description',
         'additional_info',
+        // Media and ratings
+        'profile_image',
+        'etablissement_image',
+        'rating',
+        'gallery',
+        // Availability/vacation
+        'vacation_mode',
+        'vacation_auto_reactivate_date',
         // NEW PROFILE FIELDS
         'moyens_paiement',
         'moyens_transport',
@@ -38,7 +49,9 @@ class LaboAnalyseProfile extends Model
         'horaires' => 'array',
         'moyens_paiement' => 'array',
         'moyens_transport' => 'array',
-        'jours_disponibles' => 'array'
+        'jours_disponibles' => 'array',
+        'gallery' => 'array',
+        'rating' => 'float'
     ];
     
     public function user() {

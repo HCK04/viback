@@ -22,8 +22,12 @@ class ParapharmacieProfile extends Model
         'absence_start_date',
         'absence_end_date',
         'presentation',
+        'description',
+        'org_presentation',
+        'services_description',
         'additional_info',
         'services',
+        'guard',
         // NEW PROFILE FIELDS
         'moyens_paiement',
         'moyens_transport',

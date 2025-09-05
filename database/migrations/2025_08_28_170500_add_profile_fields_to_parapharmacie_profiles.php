@@ -14,19 +14,45 @@ return new class extends Migration
     public function up()
     {
         Schema::table('parapharmacie_profiles', function (Blueprint $table) {
-            $table->string('ville')->nullable();
-            $table->string('horaire_start')->nullable();
-            $table->string('horaire_end')->nullable();
-            $table->text('presentation')->nullable();
-            $table->text('additional_info')->nullable();
-            $table->json('services')->nullable();
-            
-            // New profile fields
-            $table->json('moyens_paiement')->nullable();
-            $table->json('moyens_transport')->nullable();
-            $table->text('informations_pratiques')->nullable();
-            $table->json('jours_disponibles')->nullable();
-            $table->string('contact_urgence')->nullable();
+            if (!Schema::hasColumn('parapharmacie_profiles', 'contact_urgence')) {
+                $table->string('contact_urgence')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'org_presentation')) {
+                $table->text('org_presentation')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'services_description')) {
+                $table->text('services_description')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'ville')) {
+                $table->string('ville')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'horaire_start')) {
+                $table->string('horaire_start')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'horaire_end')) {
+                $table->string('horaire_end')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'presentation')) {
+                $table->text('presentation')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'additional_info')) {
+                $table->text('additional_info')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'services')) {
+                $table->json('services')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'moyens_paiement')) {
+                $table->json('moyens_paiement')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'moyens_transport')) {
+                $table->json('moyens_transport')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'informations_pratiques')) {
+                $table->text('informations_pratiques')->nullable();
+            }
+            if (!Schema::hasColumn('parapharmacie_profiles', 'jours_disponibles')) {
+                $table->json('jours_disponibles')->nullable();
+            }
         });
     }
 
@@ -49,7 +75,9 @@ return new class extends Migration
                 'moyens_transport',
                 'informations_pratiques',
                 'jours_disponibles',
-                'contact_urgence'
+                'contact_urgence',
+                'org_presentation',
+                'services_description'
             ]);
         });
     }

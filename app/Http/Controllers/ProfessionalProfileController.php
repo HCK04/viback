@@ -26,6 +26,13 @@ class ProfessionalProfileController extends Controller
         try {
             $user = auth()->user();
             
+            \Log::info('Professional Profile API - User Data:', [
+                'user_id' => $user->id,
+                'user_role_id' => $user->role_id,
+                'user_name' => $user->name,
+                'user_email' => $user->email
+            ]);
+            
             // Load all profile types based on user role
             $profileRelations = ['profile'];
             
@@ -58,7 +65,24 @@ class ProfessionalProfileController extends Controller
                 $profileRelations[] = 'centreRadiologieProfile';
             }
             
-            return response()->json($user->load($profileRelations));
+            \Log::info('Professional Profile API - Profile Relations:', [
+                'profile_relations' => $profileRelations,
+                'detected_role' => $user->role_id
+            ]);
+            
+            $userWithProfiles = $user->load($profileRelations);
+            
+            \Log::info('Professional Profile API - Loaded Profiles:', [
+                'has_medecin_profile' => isset($userWithProfiles->medecinProfile),
+                'has_kine_profile' => isset($userWithProfiles->kineProfile),
+                'has_clinique_profile' => isset($userWithProfiles->cliniqueProfile),
+                'has_pharmacie_profile' => isset($userWithProfiles->pharmacieProfile),
+                'has_parapharmacie_profile' => isset($userWithProfiles->parapharmacieProfile),
+                'has_labo_profile' => isset($userWithProfiles->laboAnalyseProfile),
+                'has_centre_profile' => isset($userWithProfiles->centreRadiologieProfile)
+            ]);
+            
+            return response()->json($userWithProfiles);
         } catch (\Exception $e) {
             \Log::error('Error getting professional profile: ' . $e->getMessage(), [
                 'user_id' => auth()->id(),
