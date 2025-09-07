@@ -33,6 +33,7 @@ class PharmacieProfile extends Model
         'vacation_mode',
         'vacation_auto_reactivate_date',
         'gallery',
+        'imgs',
         'responsable_name',
         'guard',
         'moyens_paiement',
@@ -49,7 +50,8 @@ class PharmacieProfile extends Model
         'moyens_paiement' => 'array',
         'moyens_transport' => 'array',
         'jours_disponibles' => 'array',
-        'gallery' => 'array'
+        'gallery' => 'array',
+        'imgs' => 'array'
     ];
     
     public function user() {

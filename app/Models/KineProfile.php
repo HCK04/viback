@@ -35,7 +35,8 @@ class KineProfile extends Model
         'informations_pratiques',
         'jours_disponibles',
         'contact_urgence',
-        'rdv_patients_suivis_uniquement'
+        'rdv_patients_suivis_uniquement',
+        'imgs'
     ];
 
     protected $casts = [
@@ -44,7 +45,8 @@ class KineProfile extends Model
         'experiences' => 'array',
         'moyens_paiement' => 'array',
         'moyens_transport' => 'array',
-        'jours_disponibles' => 'array'
+        'jours_disponibles' => 'array',
+        'imgs' => 'array'
     ];
     
     public function user() {

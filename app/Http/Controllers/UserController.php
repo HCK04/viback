@@ -99,6 +99,7 @@ class UserController extends Controller
                     'etablissement_image' => $profile->etablissement_image,
                     'profile_image' => $profile->profile_image,
                     'gallery' => $decode($profile->gallery) ?: [],
+                    'imgs' => $decode($profile->imgs) ?: [],
                     'horaires' => [
                         'start' => $profile->horaire_start,
                         'end' => $profile->horaire_end

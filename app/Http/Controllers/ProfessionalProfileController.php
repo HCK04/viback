@@ -402,61 +402,66 @@ class ProfessionalProfileController extends Controller
         try {
             $user = auth()->user();
 
+            // Accept either single profile image OR gallery images
             $request->validate([
-                'image' => 'required|image|max:5120', // 5MB max
+                'image' => 'nullable|image|max:5120', // 5MB max
+                'imgs' => 'nullable|array',
+                'imgs.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             ]);
 
+            // Helper: resolve current professional/organization profile by role
+            $getProfile = function () use ($user) {
+                if (in_array($user->role_id, [2, 4])) return $user->medecinProfile; // Medecin
+                if ($user->role_id == 3) return $user->kineProfile; // Kine
+                if ($user->role_id == 5) return $user->orthophonisteProfile; // Orthophoniste
+                if ($user->role_id == 6) return $user->psychologueProfile; // Psychologue
+                if ($user->role_id == 7) return $user->cliniqueProfile; // Clinique
+                if ($user->role_id == 8) return $user->pharmacieProfile; // Pharmacie
+                if ($user->role_id == 9) return $user->parapharmacieProfile; // Parapharmacie
+                if ($user->role_id == 10) return $user->laboAnalyseProfile; // Labo
+                if ($user->role_id == 11) return $user->centreRadiologieProfile; // Centre radiologie
+                return null;
+            };
+
+            $response = [ 'message' => 'Images updated successfully' ];
+
+            // Handle single profile/etablissement image
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
                 $filename = time() . '_' . $file->getClientOriginalName();
-
-                // Store in public/uploads/professional folder
                 $path = $file->storeAs('professional', $filename, 'public');
 
-                // Get the appropriate professional profile
-                $professionalProfile = null;
-                
-                if (in_array($user->role_id, [2, 4])) {
-                    $professionalProfile = $user->medecinProfile;
-                } elseif (in_array($user->role_id, [3])) {
-                    $professionalProfile = $user->kineProfile;
-                } elseif (in_array($user->role_id, [5])) {
-                    $professionalProfile = $user->orthophonisteProfile;
-                } elseif (in_array($user->role_id, [6])) {
-                    $professionalProfile = $user->psychologueProfile;
-                } elseif (in_array($user->role_id, [7])) {
-                    $professionalProfile = $user->cliniqueProfile;
-                } elseif (in_array($user->role_id, [8])) {
-                    $professionalProfile = $user->pharmacieProfile;
-                } elseif (in_array($user->role_id, [9])) {
-                    $professionalProfile = $user->parapharmacieProfile;
-                } elseif (in_array($user->role_id, [10])) {
-                    $professionalProfile = $user->laboAnalyseProfile;
-                } elseif (in_array($user->role_id, [11])) {
-                    $professionalProfile = $user->centreRadiologieProfile;
-                }
-
+                $professionalProfile = $getProfile();
                 if ($professionalProfile) {
-                    // Delete old image if exists
                     $imageField = in_array($user->role_id, [7, 8, 10]) ? 'etablissement_image' : 'profile_image';
-                    
                     if ($professionalProfile->$imageField && Storage::disk('public')->exists(str_replace('/storage/', '', $professionalProfile->$imageField))) {
                         Storage::disk('public')->delete(str_replace('/storage/', '', $professionalProfile->$imageField));
                     }
-
-                    // Update profile image path
                     $professionalProfile->$imageField = '/storage/' . $path;
                     $professionalProfile->save();
-
-                    return response()->json([
-                        'message' => 'Professional image updated successfully',
-                        'path' => '/storage/' . $path
-                    ]);
+                    $response['path'] = '/storage/' . $path;
                 }
             }
 
-            return response()->json(['message' => 'No file uploaded or invalid profile type'], 400);
+            // Handle gallery images (imgs[]) - replace current set, limit 6
+            if ($request->hasFile('imgs')) {
+                $professionalProfile = $getProfile();
+                if ($professionalProfile) {
+                    $imgsPaths = [];
+                    $files = $request->file('imgs');
+                    foreach ($files as $i => $file) {
+                        if ($i >= 6) break;
+                        $filename = time() . '_' . $file->getClientOriginalName();
+                        $stored = $file->storeAs('public/imgs', $filename);
+                        $imgsPaths[] = '/storage/' . str_replace('public/', '', $stored);
+                    }
+                    $professionalProfile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
+                    $professionalProfile->save();
+                    $response['imgs'] = $imgsPaths;
+                }
+            }
 
+            return response()->json($response);
         } catch (\Exception $e) {
             \Log::error('Error updating professional image: ' . $e->getMessage(), [
                 'user_id' => auth()->id(),

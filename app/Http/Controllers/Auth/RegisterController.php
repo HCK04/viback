@@ -66,7 +66,10 @@ class RegisterController extends Controller
                 'informations_pratiques' => 'nullable|string|max:1000',
                 'jours_disponibles' => 'nullable|array',
                 'contact_urgence' => 'nullable|string|max:20',
-                'rdv_patients_suivis_uniquement' => 'nullable|boolean'
+                'rdv_patients_suivis_uniquement' => 'nullable|boolean',
+                // Gallery images (up to 6)
+                'imgs' => 'nullable|array',
+                'imgs.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120'
             ], [
                 'password.regex' => 'Le mot de passe doit contenir au moins 8 caractères, une lettre majuscule, une lettre minuscule, un chiffre et un caractère spécial (@$!%*?&).',
                 'password.confirmed' => 'La confirmation du mot de passe ne correspond pas.',
@@ -244,6 +247,25 @@ class RegisterController extends Controller
                         \Log::info('Request numero_carte_professionnelle: ' . ($request->numero_carte_professionnelle ?? 'null'));
                         
                         $profile = MedecinProfile::create($profileData);
+                        // Handle gallery images (imgs[])
+                        if ($request->hasFile('imgs')) {
+                            try {
+                                $imgsPaths = [];
+                                $files = $request->file('imgs');
+                                foreach ($files as $i => $file) {
+                                    if ($i >= 6) break;
+                                    $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                                    $path = $file->storeAs('public/imgs', $filename);
+                                    $imgsPaths[] = str_replace('public/', '', $path);
+                                }
+                                if (!empty($imgsPaths)) {
+                                    $profile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
+                                    $profile->save();
+                                }
+                            } catch (\Exception $e) {
+                                \Log::error('Failed to store medecin imgs:', ['error' => $e->getMessage()]);
+                            }
+                        }
                         \Log::info('Medecin profile created successfully:', ['profile_id' => $profile->id]);
                         
                     } catch (\Exception $e) {
@@ -331,7 +353,26 @@ class RegisterController extends Controller
                         $profileData['rdv_patients_suivis_uniquement'] = $request->rdv_patients_suivis_uniquement ? 1 : 0;
                     }
 
-                    $modelClass::create($profileData);
+                    $createdProfile = $modelClass::create($profileData);
+                    // Handle gallery images (imgs[])
+                    if ($request->hasFile('imgs')) {
+                        try {
+                            $imgsPaths = [];
+                            $files = $request->file('imgs');
+                            foreach ($files as $i => $file) {
+                                if ($i >= 6) break;
+                                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                                $path = $file->storeAs('public/imgs', $filename);
+                                $imgsPaths[] = str_replace('public/', '', $path);
+                            }
+                            if (!empty($imgsPaths)) {
+                                $createdProfile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
+                                $createdProfile->save();
+                            }
+                        } catch (\Exception $e) {
+                            \Log::error('Failed to store professional imgs:', ['role' => $role->name, 'error' => $e->getMessage()]);
+                        }
+                    }
                     break;
 
                 // Organization cases are now handled by the new API above

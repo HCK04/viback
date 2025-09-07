@@ -32,6 +32,7 @@ class LaboAnalyseProfile extends Model
         'etablissement_image',
         'rating',
         'gallery',
+        'imgs',
         // Availability/vacation
         'vacation_mode',
         'vacation_auto_reactivate_date',
@@ -51,7 +52,8 @@ class LaboAnalyseProfile extends Model
         'moyens_transport' => 'array',
         'jours_disponibles' => 'array',
         'gallery' => 'array',
-        'rating' => 'float'
+        'rating' => 'float',
+        'imgs' => 'array'
     ];
     
     public function user() {

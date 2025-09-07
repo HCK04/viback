@@ -44,7 +44,8 @@ class CliniqueProfile extends Model
         'rating',
         'vacation_mode',
         'vacation_auto_reactivate_date',
-        'gallery'
+        'gallery',
+        'imgs'
     ];
 
     // Add this to handle JSON data
@@ -53,7 +54,8 @@ class CliniqueProfile extends Model
         'horaires' => 'array',
         'moyens_paiement' => 'array',
         'moyens_transport' => 'array',
-        'jours_disponibles' => 'array'
+        'jours_disponibles' => 'array',
+        'imgs' => 'array'
     ];
     
     public function user() {

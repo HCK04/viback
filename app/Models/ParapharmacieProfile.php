@@ -33,7 +33,8 @@ class ParapharmacieProfile extends Model
         'moyens_transport',
         'informations_pratiques',
         'jours_disponibles',
-        'contact_urgence'
+        'contact_urgence',
+        'imgs'
     ];
     
     // Add this to handle JSON data
@@ -42,7 +43,8 @@ class ParapharmacieProfile extends Model
         'services' => 'array',
         'moyens_paiement' => 'array',
         'moyens_transport' => 'array',
-        'jours_disponibles' => 'array'
+        'jours_disponibles' => 'array',
+        'imgs' => 'array'
     ];
     
     public function user() {

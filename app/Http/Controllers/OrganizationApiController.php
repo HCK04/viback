@@ -58,7 +58,10 @@ class OrganizationApiController extends Controller
                 'contact_urgence' => 'nullable|string|max:20',
                 'clinic_presentation' => 'nullable|string|max:2000',
                 'clinic_services_description' => 'nullable|string|max:2000',
-                'guard' => 'nullable|in:0,1,true,false'
+                'guard' => 'nullable|in:0,1,true,false',
+                // Gallery images
+                'imgs' => 'nullable|array',
+                'imgs.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120'
             ]);
 
             // Create user
@@ -195,6 +198,26 @@ class OrganizationApiController extends Controller
                     throw new \Exception('Invalid organization type');
             }
 
+            // Handle gallery images (imgs[])
+            if ($request->hasFile('imgs')) {
+                try {
+                    $imgsPaths = [];
+                    $files = $request->file('imgs');
+                    foreach ($files as $i => $file) {
+                        if ($i >= 6) break; // limit to 6
+                        $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                        $path = $file->storeAs('public/imgs', $filename);
+                        $imgsPaths[] = str_replace('public/', '', $path);
+                    }
+                    if (!empty($imgsPaths)) {
+                        $profile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
+                        $profile->save();
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Failed to store organization imgs:', ['error' => $e->getMessage()]);
+                }
+            }
+
             DB::commit();
 
             // Generate token
@@ -274,6 +297,7 @@ class OrganizationApiController extends Controller
                             'etablissement_image' => $profile->etablissement_image ?? '',
                             'profile_image' => $profile->profile_image ?? '',
                             'gallery' => $profile->gallery ? (is_string($profile->gallery) ? json_decode($profile->gallery, true) : $profile->gallery) : [],
+                            'imgs' => $profile->imgs ? (is_string($profile->imgs) ? json_decode($profile->imgs, true) : $profile->imgs) : [],
                             'horaires' => [
                                 'start' => $profile->horaire_start ?? '',
                                 'end' => $profile->horaire_end ?? ''
@@ -324,12 +348,28 @@ class OrganizationApiController extends Controller
             }
 
             $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
-            if (!in_array($user->role->name, $orgTypes)) {
-                return response()->json(['message' => 'Not an organization'], 404);
+            $roleName = $user->role->name ?? null;
+            if (!$roleName || !in_array($roleName, $orgTypes)) {
+                // Try to infer org type from existing profile rows
+                $roleName = null;
+                if (CliniqueProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'clinique';
+                } elseif (PharmacieProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'pharmacie';
+                } elseif (ParapharmacieProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'parapharmacie';
+                } elseif (LaboAnalyseProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'labo_analyse';
+                } elseif (CentreRadiologieProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'centre_radiologie';
+                }
+                if (!$roleName) {
+                    return response()->json(['message' => 'Not an organization'], 404);
+                }
             }
 
-            $modelClass = $this->getModelClass($user->role->name);
-            $nameField = $this->getNameField($user->role->name);
+            $modelClass = $this->getModelClass($roleName);
+            $nameField = $this->getNameField($roleName);
             
             $profile = $modelClass::where('user_id', $id)->first();
             
@@ -337,10 +377,24 @@ class OrganizationApiController extends Controller
                 return response()->json(['message' => 'Organization profile not found'], 404);
             }
 
+            // Robust decoding helpers
+            $toArray = function ($value) {
+                if (empty($value) && $value !== '0') return [];
+                if (is_array($value)) return $value;
+                if (is_string($value)) {
+                    $decoded = json_decode($value, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) return $decoded;
+                    // Not JSON array: treat as single path/value
+                    $trimmed = trim($value);
+                    return $trimmed !== '' ? [$trimmed] : [];
+                }
+                return [];
+            };
+
             $organization = [
                 'id' => $user->id,
                 'name' => $profile->$nameField ?? $user->name,
-                'type' => $user->role->name,
+                'type' => $roleName,
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'adresse' => $profile->adresse,
@@ -358,17 +412,18 @@ class OrganizationApiController extends Controller
                 'contact_urgence' => $profile->contact_urgence,
                 'etablissement_image' => $profile->etablissement_image,
                 'profile_image' => $profile->profile_image,
-                'gallery' => $profile->gallery ? json_decode($profile->gallery, true) : [],
+                'gallery' => $toArray($profile->gallery),
+                'imgs' => $toArray($profile->imgs),
                 'horaires' => [
                     'start' => $profile->horaire_start,
                     'end' => $profile->horaire_end
                 ],
                 'horaire_start' => $profile->horaire_start,
                 'horaire_end' => $profile->horaire_end,
-                'services' => $profile->services ? json_decode($profile->services, true) : [],
-                'moyens_paiement' => $profile->moyens_paiement ? json_decode($profile->moyens_paiement, true) : [],
-                'moyens_transport' => $profile->moyens_transport ? json_decode($profile->moyens_transport, true) : [],
-                'jours_disponibles' => $profile->jours_disponibles ? json_decode($profile->jours_disponibles, true) : [],
+                'services' => $toArray($profile->services),
+                'moyens_paiement' => $toArray($profile->moyens_paiement),
+                'moyens_transport' => $toArray($profile->moyens_transport),
+                'jours_disponibles' => $toArray($profile->jours_disponibles),
                 'responsable_name' => $profile->responsable_name,
                 'gerant_name' => $profile->gerant_name ?? null,
                 'disponible' => $profile->disponible,
@@ -451,6 +506,9 @@ class OrganizationApiController extends Controller
                 'name' => 'nullable|string|max:100',
                 'email' => 'nullable|email|unique:users,email,' . $id,
                 'phone' => 'nullable|string|max:20|unique:users,phone,' . $id,
+                // Gallery images
+                'imgs' => 'nullable|array',
+                'imgs.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             ]);
 
             $modelClass = $this->getModelClass($user->role->name);
@@ -537,6 +595,24 @@ class OrganizationApiController extends Controller
             }
 
             $profile->update($updateData);
+
+            // If new gallery images are provided, replace current imgs with the new set (up to 6)
+            if ($request->hasFile('imgs')) {
+                try {
+                    $imgsPaths = [];
+                    $files = $request->file('imgs');
+                    foreach ($files as $i => $file) {
+                        if ($i >= 6) break;
+                        $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                        $path = $file->storeAs('public/imgs', $filename);
+                        $imgsPaths[] = str_replace('public/', '', $path);
+                    }
+                    $profile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
+                    $profile->save();
+                } catch (\Exception $e) {
+                    \Log::error('Failed to update organization imgs:', ['id' => $id, 'error' => $e->getMessage()]);
+                }
+            }
 
             DB::commit();
 

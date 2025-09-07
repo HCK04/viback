@@ -129,6 +129,17 @@ class ProfessionalController extends Controller
             Log::info("No moyens_transport found");
         }
 
+        // Parse imgs JSON if present
+        $imgs = [];
+        if (isset($profile->imgs) && $profile->imgs) {
+            try {
+                $decoded = json_decode($profile->imgs, true);
+                $imgs = is_array($decoded) ? $decoded : [];
+            } catch (\Exception $e) {
+                $imgs = [];
+            }
+        }
+
         $joursDisponibles = [];
         if (isset($profile->jours_disponibles) && $profile->jours_disponibles) {
             Log::info("Raw jours_disponibles: " . $profile->jours_disponibles);
@@ -159,6 +170,7 @@ class ProfessionalController extends Controller
             'profile_image' => $profile->profile_image ?? null,
             'horaire_start' => $profile->horaire_start ?? null,
             'horaire_end' => $profile->horaire_end ?? null,
+            'imgs' => $imgs,
             'moyens_paiement' => $moyensPaiement,
             'moyens_transport' => $moyensTransport,
             'jours_disponibles' => $joursDisponibles,
@@ -246,6 +258,17 @@ class ProfessionalController extends Controller
             $joursDisponibles = is_array($decoded) ? $decoded : [];
         }
 
+        // Parse imgs JSON if present
+        $imgs = [];
+        if (isset($profile->imgs) && $profile->imgs) {
+            try {
+                $decoded = json_decode($profile->imgs, true);
+                $imgs = is_array($decoded) ? $decoded : [];
+            } catch (\Exception $e) {
+                $imgs = [];
+            }
+        }
+
         return [
             'id' => $user->id,
             'name' => $orgName,
@@ -267,6 +290,7 @@ class ProfessionalController extends Controller
             'informations_pratiques' => $profile->informations_pratiques ?? null,
             'contact_urgence' => $profile->contact_urgence ?? null,
             'gallery' => $galleryImages,
+            'imgs' => $imgs,
             'etablissement_image' => $profile->etablissement_image ?? null,
             'profile_image' => $profile->profile_image ?? null,
             'horaires' => $horaires,

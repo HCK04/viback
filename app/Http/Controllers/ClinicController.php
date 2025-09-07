@@ -43,6 +43,7 @@ class ClinicController extends Controller
                     'clinique_profiles.vacation_mode',
                     'clinique_profiles.vacation_auto_reactivate_date',
                     'clinique_profiles.gallery',
+                    'clinique_profiles.imgs',
                     'clinique_profiles.disponible as clinic_disponible',
                     'clinique_profiles.absence_start_date as clinic_absence_start',
                     'clinique_profiles.absence_end_date as clinic_absence_end',
@@ -103,6 +104,15 @@ class ClinicController extends Controller
             if ($clinic->gallery && is_string($clinic->gallery)) {
                 try {
                     $clinic->gallery = json_decode($clinic->gallery, true);
+                } catch (\Exception $e) {
+                    // Keep as string if JSON parsing fails
+                }
+            }
+
+            // Parse imgs JSON if present
+            if (isset($clinic->imgs) && $clinic->imgs && is_string($clinic->imgs)) {
+                try {
+                    $clinic->imgs = json_decode($clinic->imgs, true);
                 } catch (\Exception $e) {
                     // Keep as string if JSON parsing fails
                 }
