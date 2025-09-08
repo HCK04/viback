@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\ParapharmacieProfile;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class PharmacyApiController extends Controller
 {
@@ -15,34 +16,56 @@ class PharmacyApiController extends Controller
     public function index(Request $request)
     {
         try {
+            // Handle older schemas gracefully (guard columns may not exist yet)
+            $hasGuard = Schema::hasColumn('pharmacie_profiles', 'guard');
+            $hasGuardStart = Schema::hasColumn('pharmacie_profiles', 'guard_start_date');
+            $hasGuardEnd = Schema::hasColumn('pharmacie_profiles', 'guard_end_date');
+
+            $select = [
+                'users.id',
+                \DB::raw('pharmacie_profiles.id as pharmacy_id'),
+                'pharmacie_profiles.nom_pharmacie',
+                \DB::raw('pharmacie_profiles.nom_pharmacie as name'),
+                'pharmacie_profiles.adresse',
+                'pharmacie_profiles.ville',
+                'pharmacie_profiles.services',
+                'pharmacie_profiles.description',
+                'pharmacie_profiles.org_presentation',
+                'pharmacie_profiles.services_description',
+                'pharmacie_profiles.responsable_name',
+                'pharmacie_profiles.horaire_start',
+                'pharmacie_profiles.horaire_end',
+                'pharmacie_profiles.rating',
+                $hasGuard ? 'pharmacie_profiles.guard' : \DB::raw('0 as guard'),
+                $hasGuardStart ? 'pharmacie_profiles.guard_start_date' : \DB::raw('NULL as guard_start_date'),
+                $hasGuardEnd ? 'pharmacie_profiles.guard_end_date' : \DB::raw('NULL as guard_end_date'),
+                'pharmacie_profiles.disponible',
+                'pharmacie_profiles.vacation_mode',
+                'pharmacie_profiles.absence_start_date',
+                'pharmacie_profiles.absence_end_date',
+                'pharmacie_profiles.vacation_auto_reactivate_date',
+                'users.email',
+                'users.phone',
+                'users.is_verified',
+                'pharmacie_profiles.created_at',
+                'pharmacie_profiles.updated_at'
+            ];
+
             // Get pharmacies from pharmacie_profiles table
             $pharmacies = \DB::table('pharmacie_profiles')
                 ->join('users', 'pharmacie_profiles.user_id', '=', 'users.id')
-                ->select(
-                    'users.id',
-                    'pharmacie_profiles.id as pharmacy_id',
-                    'pharmacie_profiles.nom_pharmacie',
-                    'pharmacie_profiles.nom_pharmacie as name',
-                    'pharmacie_profiles.adresse',
-                    'pharmacie_profiles.ville',
-                    'pharmacie_profiles.services',
-                    'pharmacie_profiles.description',
-                    'pharmacie_profiles.org_presentation',
-                    'pharmacie_profiles.services_description',
-                    'pharmacie_profiles.responsable_name',
-                    'pharmacie_profiles.horaire_start',
-                    'pharmacie_profiles.horaire_end',
-                    'pharmacie_profiles.rating',
-                    'pharmacie_profiles.guard',
-                    'users.email',
-                    'users.phone',
-                    'users.is_verified',
-                    'pharmacie_profiles.created_at',
-                    'pharmacie_profiles.updated_at'
-                )
+                ->select($select)
                 ->get();
 
             $pharmacyData = $pharmacies->map(function($pharmacy) {
+                // Compute effective guard (false if guard_end_date passed)
+                $effectiveGuard = (bool)$pharmacy->guard;
+                try {
+                    if ($pharmacy->guard_end_date) {
+                        $effectiveGuard = (strtotime($pharmacy->guard_end_date) >= strtotime(date('Y-m-d'))) && $effectiveGuard;
+                    }
+                } catch (\Exception $e) {}
+
                 return [
                     'id' => $pharmacy->id,
                     'pharmacy_id' => $pharmacy->pharmacy_id,
@@ -58,7 +81,14 @@ class PharmacyApiController extends Controller
                     'horaire_start' => $pharmacy->horaire_start,
                     'horaire_end' => $pharmacy->horaire_end,
                     'rating' => (string)$pharmacy->rating,
-                    'guard' => (bool)$pharmacy->guard,
+                    'guard' => (bool)$effectiveGuard,
+                    'guard_start_date' => $pharmacy->guard_start_date,
+                    'guard_end_date' => $pharmacy->guard_end_date,
+                    'disponible' => (bool)$pharmacy->disponible,
+                    'vacation_mode' => (bool)$pharmacy->vacation_mode,
+                    'absence_start_date' => $pharmacy->absence_start_date,
+                    'absence_end_date' => $pharmacy->absence_end_date,
+                    'vacation_auto_reactivate_date' => $pharmacy->vacation_auto_reactivate_date,
                     'type' => 'pharmacie',
                     'email' => $pharmacy->email,
                     'phone' => $pharmacy->phone,
@@ -94,34 +124,47 @@ class PharmacyApiController extends Controller
             $ville = $request->get('ville');
             
             // Get pharmacies from pharmacie_profiles table with city filter
+            $hasGuard = Schema::hasColumn('pharmacie_profiles', 'guard');
+            $hasGuardStart = Schema::hasColumn('pharmacie_profiles', 'guard_start_date');
+            $hasGuardEnd = Schema::hasColumn('pharmacie_profiles', 'guard_end_date');
+
+            $select = [
+                'users.id',
+                \DB::raw('pharmacie_profiles.id as pharmacy_id'),
+                'pharmacie_profiles.nom_pharmacie',
+                'pharmacie_profiles.adresse',
+                'pharmacie_profiles.ville',
+                'pharmacie_profiles.services',
+                'pharmacie_profiles.description',
+                'pharmacie_profiles.org_presentation',
+                'pharmacie_profiles.services_description',
+                'pharmacie_profiles.responsable_name',
+                'pharmacie_profiles.horaire_start',
+                'pharmacie_profiles.horaire_end',
+                'pharmacie_profiles.rating',
+                $hasGuard ? 'pharmacie_profiles.guard' : \DB::raw('0 as guard'),
+                $hasGuardStart ? 'pharmacie_profiles.guard_start_date' : \DB::raw('NULL as guard_start_date'),
+                $hasGuardEnd ? 'pharmacie_profiles.guard_end_date' : \DB::raw('NULL as guard_end_date'),
+                'pharmacie_profiles.disponible',
+                'pharmacie_profiles.vacation_mode',
+                'pharmacie_profiles.absence_start_date',
+                'pharmacie_profiles.absence_end_date',
+                'pharmacie_profiles.vacation_auto_reactivate_date',
+                'pharmacie_profiles.moyens_paiement',
+                'pharmacie_profiles.moyens_transport',
+                'pharmacie_profiles.informations_pratiques',
+                'pharmacie_profiles.jours_disponibles',
+                'pharmacie_profiles.contact_urgence',
+                'users.email',
+                'users.phone',
+                'users.is_verified',
+                'pharmacie_profiles.created_at',
+                'pharmacie_profiles.updated_at'
+            ];
+
             $query = \DB::table('pharmacie_profiles')
                 ->join('users', 'pharmacie_profiles.user_id', '=', 'users.id')
-                ->select(
-                    'users.id',
-                    'pharmacie_profiles.id as pharmacy_id',
-                    'pharmacie_profiles.nom_pharmacie',
-                    'pharmacie_profiles.adresse',
-                    'pharmacie_profiles.ville',
-                    'pharmacie_profiles.services',
-                    'pharmacie_profiles.description',
-                    'pharmacie_profiles.org_presentation',
-                    'pharmacie_profiles.services_description',
-                    'pharmacie_profiles.responsable_name',
-                    'pharmacie_profiles.horaire_start',
-                    'pharmacie_profiles.horaire_end',
-                    'pharmacie_profiles.rating',
-                    'pharmacie_profiles.guard',
-                    'pharmacie_profiles.moyens_paiement',
-                    'pharmacie_profiles.moyens_transport',
-                    'pharmacie_profiles.informations_pratiques',
-                    'pharmacie_profiles.jours_disponibles',
-                    'pharmacie_profiles.contact_urgence',
-                    'users.email',
-                    'users.phone',
-                    'users.is_verified',
-                    'pharmacie_profiles.created_at',
-                    'pharmacie_profiles.updated_at'
-                );
+                ->select($select);
             
             if ($ville && $ville !== 'Toutes les villes') {
                 $query->where('pharmacie_profiles.ville', 'LIKE', "%{$ville}%");
@@ -130,6 +173,13 @@ class PharmacyApiController extends Controller
             $pharmacies = $query->get();
             
             $pharmacyData = $pharmacies->map(function($pharmacy) {
+                $effectiveGuard = (bool)$pharmacy->guard;
+                try {
+                    if ($pharmacy->guard_end_date) {
+                        $effectiveGuard = (strtotime($pharmacy->guard_end_date) >= strtotime(date('Y-m-d'))) && $effectiveGuard;
+                    }
+                } catch (\Exception $e) {}
+
                 return [
                     'id' => $pharmacy->id,
                     'pharmacy_id' => $pharmacy->pharmacy_id,
@@ -145,7 +195,14 @@ class PharmacyApiController extends Controller
                     'horaire_start' => $pharmacy->horaire_start,
                     'horaire_end' => $pharmacy->horaire_end,
                     'rating' => (string)$pharmacy->rating,
-                    'guard' => (bool)$pharmacy->guard,
+                    'guard' => (bool)$effectiveGuard,
+                    'guard_start_date' => $pharmacy->guard_start_date,
+                    'guard_end_date' => $pharmacy->guard_end_date,
+                    'disponible' => (bool)$pharmacy->disponible,
+                    'vacation_mode' => (bool)$pharmacy->vacation_mode,
+                    'absence_start_date' => $pharmacy->absence_start_date,
+                    'absence_end_date' => $pharmacy->absence_end_date,
+                    'vacation_auto_reactivate_date' => $pharmacy->vacation_auto_reactivate_date,
                     'moyens_paiement' => json_decode($pharmacy->moyens_paiement, true) ?: [],
                     'moyens_transport' => json_decode($pharmacy->moyens_transport, true) ?: [],
                     'informations_pratiques' => $pharmacy->informations_pratiques,
@@ -201,6 +258,8 @@ class PharmacyApiController extends Controller
                     'pharmacie_profiles.horaire_end',
                     'pharmacie_profiles.rating',
                     'pharmacie_profiles.guard',
+                    'pharmacie_profiles.guard_start_date',
+                    'pharmacie_profiles.guard_end_date',
                     'pharmacie_profiles.moyens_paiement',
                     'pharmacie_profiles.moyens_transport',
                     'pharmacie_profiles.informations_pratiques',
@@ -227,6 +286,13 @@ class PharmacyApiController extends Controller
                 return response()->json(['message' => 'Pharmacy not found'], 404);
             }
             
+            $effectiveGuard = (bool)$pharmacy->guard;
+            try {
+                if ($pharmacy->guard_end_date) {
+                    $effectiveGuard = (strtotime($pharmacy->guard_end_date) >= strtotime(date('Y-m-d'))) && $effectiveGuard;
+                }
+            } catch (\Exception $e) {}
+
             $pharmacyData = [
                 'id' => $pharmacy->id,
                 'pharmacy_id' => $pharmacy->pharmacy_id,
@@ -242,7 +308,9 @@ class PharmacyApiController extends Controller
                 'horaire_start' => $pharmacy->horaire_start,
                 'horaire_end' => $pharmacy->horaire_end,
                 'rating' => (float)$pharmacy->rating,
-                'guard' => (bool)$pharmacy->guard,
+                'guard' => (bool)$effectiveGuard,
+                'guard_start_date' => $pharmacy->guard_start_date,
+                'guard_end_date' => $pharmacy->guard_end_date,
                 'moyens_paiement' => json_decode($pharmacy->moyens_paiement, true) ?: [],
                 'moyens_transport' => json_decode($pharmacy->moyens_transport, true) ?: [],
                 'informations_pratiques' => $pharmacy->informations_pratiques,

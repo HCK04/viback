@@ -317,8 +317,6 @@ class RegisterController extends Controller
                         'experience_years' => $request->experience_years,
                         'horaire_start' => $request->horaire_start,
                         'horaire_end' => $request->horaire_end,
-                        'diplomes' => json_encode($diplomesData, JSON_UNESCAPED_UNICODE),
-                        'experiences' => json_encode($experiencesData, JSON_UNESCAPED_UNICODE),
                         'adresse' => $request->adresse,
                         'ville' => $request->ville,
                         'presentation' => $request->presentation,
@@ -329,6 +327,38 @@ class RegisterController extends Controller
                             $request->file('profile_image')->store('public/profiles') : null,
                         'disponible' => true
                     ];
+
+                    // Dynamically assign diplomes/diplomas and experiences based on table columns
+                    try {
+                        $modelInstance = new $modelClass();
+                        $tableName = $modelInstance->getTable();
+                        $hasDiplomesCol = Schema::hasColumn($tableName, 'diplomes');
+                        $hasDiplomasCol = Schema::hasColumn($tableName, 'diplomas');
+                        $hasExperiencesCol = Schema::hasColumn($tableName, 'experiences');
+
+                        \Log::info('Register pro debug (diplomes/experiences columns)', [
+                            'role' => $role->name,
+                            'table' => $tableName,
+                            'has_diplomes_col' => $hasDiplomesCol,
+                            'has_diplomas_col' => $hasDiplomasCol,
+                            'has_experiences_col' => $hasExperiencesCol,
+                        ]);
+
+                        if ($hasDiplomesCol) {
+                            $profileData['diplomes'] = json_encode($diplomesData, JSON_UNESCAPED_UNICODE);
+                        }
+                        if ($hasDiplomasCol) {
+                            $profileData['diplomas'] = json_encode($diplomesData, JSON_UNESCAPED_UNICODE);
+                        }
+                        if ($hasExperiencesCol) {
+                            $profileData['experiences'] = json_encode($experiencesData, JSON_UNESCAPED_UNICODE);
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning('Register pro debug: failed to detect columns', ['error' => $e->getMessage()]);
+                        // Fallback to diplomes/experiences keys
+                        $profileData['diplomes'] = json_encode($diplomesData, JSON_UNESCAPED_UNICODE);
+                        $profileData['experiences'] = json_encode($experiencesData, JSON_UNESCAPED_UNICODE);
+                    }
 
                     // Add new profile fields
                     if ($request->has('numero_carte_professionnelle')) {

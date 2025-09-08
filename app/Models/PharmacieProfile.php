@@ -36,6 +36,8 @@ class PharmacieProfile extends Model
         'imgs',
         'responsable_name',
         'guard',
+        'guard_start_date',
+        'guard_end_date',
         'moyens_paiement',
         'moyens_transport',
         'informations_pratiques',
@@ -51,7 +53,9 @@ class PharmacieProfile extends Model
         'moyens_transport' => 'array',
         'jours_disponibles' => 'array',
         'gallery' => 'array',
-        'imgs' => 'array'
+        'imgs' => 'array',
+        'guard_start_date' => 'date',
+        'guard_end_date' => 'date'
     ];
     
     public function user() {

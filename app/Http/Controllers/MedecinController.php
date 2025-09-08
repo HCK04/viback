@@ -43,6 +43,18 @@ class MedecinController extends Controller
                     'rating' => $profile->rating ?? 0,
                     'presentation' => $profile->presentation ?? null,
                     'additional_info' => $profile->additional_info ?? null,
+                    'profile_image' => $profile->profile_image ?? null,
+                    // Expose gallery images; keep as array if JSON, otherwise raw string
+                    'imgs' => (function() use ($profile) {
+                        $raw = $profile->imgs ?? null;
+                        if (!$raw) return null;
+                        try {
+                            $parsed = json_decode($raw, true);
+                            return is_array($parsed) ? $parsed : $raw;
+                        } catch (\Throwable $e) {
+                            return $raw;
+                        }
+                    })(),
                     'is_verified' => $profile->user->is_verified,
                     'created_at' => $profile->user->created_at
                 ]);
@@ -177,6 +189,17 @@ class MedecinController extends Controller
             'horaires' => $profile->horaires ?? null,
             'horaire_start' => $profile->horaire_start ?? null,
             'horaire_end' => $profile->horaire_end ?? null,
+            // Expose gallery images for public profile
+            'imgs' => (function() use ($profile) {
+                $raw = $profile->imgs ?? null;
+                if (!$raw) return null;
+                try {
+                    $parsed = json_decode($raw, true);
+                    return is_array($parsed) ? $parsed : $raw;
+                } catch (\Throwable $e) {
+                    return $raw;
+                }
+            })(),
             // CV fields
             'presentation' => $profile->presentation ?? null,
             'carte_professionnelle' => $profile->carte_professionnelle ?? null,

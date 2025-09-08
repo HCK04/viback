@@ -114,6 +114,10 @@ class UserController extends Controller
                     'gerant_name' => $profile->gerant_name ?? null,
                     'disponible' => $profile->disponible,
                     'vacation_mode' => $profile->vacation_mode ?? false,
+                    // Guard fields (pharmacies only; will be null for others)
+                    'guard' => $profile->guard ?? false,
+                    'guard_start_date' => $profile->guard_start_date ?? null,
+                    'guard_end_date' => $profile->guard_end_date ?? null,
                     'absence_start_date' => $profile->absence_start_date,
                     'absence_end_date' => $profile->absence_end_date,
                     'is_verified' => $user->is_verified,

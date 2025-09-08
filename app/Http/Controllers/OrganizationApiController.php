@@ -12,6 +12,7 @@ use App\Models\PharmacieProfile;
 use App\Models\ParapharmacieProfile;
 use App\Models\LaboAnalyseProfile;
 use App\Models\CentreRadiologieProfile;
+use Carbon\Carbon;
 
 class OrganizationApiController extends Controller
 {
@@ -502,6 +503,10 @@ class OrganizationApiController extends Controller
                 'absence_start_date' => 'nullable|date',
                 'absence_end_date' => 'nullable|date',
                 'vacation_mode' => 'nullable|in:0,1,true,false',
+                // Pharmacy guard fields
+                'guard' => 'nullable|in:0,1,true,false',
+                'guard_start_date' => 'nullable|date',
+                'guard_end_date' => 'nullable|date',
                 // Optional user fields
                 'name' => 'nullable|string|max:100',
                 'email' => 'nullable|email|unique:users,email,' . $id,
@@ -509,6 +514,8 @@ class OrganizationApiController extends Controller
                 // Gallery images
                 'imgs' => 'nullable|array',
                 'imgs.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
+                'imgs_keep' => 'nullable|array',
+                'imgs_keep.*' => 'string|max:255',
             ]);
 
             $modelClass = $this->getModelClass($user->role->name);
@@ -566,7 +573,7 @@ class OrganizationApiController extends Controller
                     continue;
                 }
                 // Booleans
-                if (in_array($key, ['disponible', 'vacation_mode'])) {
+                if (in_array($key, ['disponible', 'vacation_mode', 'guard'])) {
                     $updateData[$key] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
                     continue;
                 }
@@ -594,24 +601,83 @@ class OrganizationApiController extends Controller
                 $user->save();
             }
 
+            // If pharmacy, apply guard defaults and constraints
+            if ($user->role->name === 'pharmacie') {
+                if (array_key_exists('guard', $updateData)) {
+                    $guardOn = (bool)$updateData['guard'];
+                    if ($guardOn) {
+                        // Ensure start/end dates exist; default to [today, today+7d]
+                        if (empty($validated['guard_start_date'])) {
+                            $updateData['guard_start_date'] = Carbon::now()->toDateString();
+                        }
+                        if (empty($validated['guard_end_date'])) {
+                            $updateData['guard_end_date'] = Carbon::now()->addWeek()->toDateString();
+                        }
+                    } else {
+                        // Clearing guard turns dates off
+                        $updateData['guard_start_date'] = null;
+                        $updateData['guard_end_date'] = null;
+                    }
+                }
+            } else {
+                // Non-pharmacy: never allow guard
+                unset($updateData['guard'], $updateData['guard_start_date'], $updateData['guard_end_date']);
+            }
+
             $profile->update($updateData);
 
-            // If new gallery images are provided, replace current imgs with the new set (up to 6)
-            if ($request->hasFile('imgs')) {
-                try {
-                    $imgsPaths = [];
-                    $files = $request->file('imgs');
-                    foreach ($files as $i => $file) {
-                        if ($i >= 6) break;
-                        $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                        $path = $file->storeAs('public/imgs', $filename);
-                        $imgsPaths[] = str_replace('public/', '', $path);
-                    }
-                    $profile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
+            // Handle gallery updates per slot: combine kept paths and new files according to their indices (0..5)
+            try {
+                $hasKeep = $request->has('imgs_keep');
+                $hasNew = $request->hasFile('imgs');
+                $clearAll = filter_var($request->input('clear_imgs'), FILTER_VALIDATE_BOOLEAN) || $request->input('clear_imgs') === '1';
+
+                if ($clearAll && !$hasKeep && !$hasNew) {
+                    $profile->imgs = json_encode([], JSON_UNESCAPED_UNICODE);
                     $profile->save();
-                } catch (\Exception $e) {
-                    \Log::error('Failed to update organization imgs:', ['id' => $id, 'error' => $e->getMessage()]);
+                } elseif ($hasKeep || $hasNew) {
+                    $newImgs = [];
+                    for ($idx = 0; $idx < 6; $idx++) {
+                        // Prefer kept path if provided at this index
+                        $keepPath = $request->input("imgs_keep.$idx");
+                        if (!is_null($keepPath)) {
+                            $p = (string)$keepPath;
+                            // Normalize incoming path such as '/storage/imgs/xxx.jpg' or 'public/imgs/xxx.jpg' to 'imgs/xxx.jpg'
+                            $p = ltrim($p, '/');
+                            if (stripos($p, 'storage/') === 0) {
+                                $p = substr($p, 8); // remove 'storage/'
+                            }
+                            if (stripos($p, 'public/') === 0) {
+                                $p = substr($p, 7); // remove 'public/'
+                            }
+                            // Only allow gallery under imgs/
+                            if (stripos($p, 'imgs/') !== 0) {
+                                // If it's another folder, attempt to place under imgs/ keeping filename
+                                $filename = basename($p);
+                                $p = 'imgs/' . $filename;
+                            }
+                            $newImgs[] = $p;
+                            continue;
+                        }
+
+                        // Otherwise, check for new file at this index
+                        if ($request->hasFile("imgs.$idx")) {
+                            $file = $request->file("imgs.$idx");
+                            if ($file && $file->isValid()) {
+                                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                                $path = $file->storeAs('public/imgs', $filename);
+                                $newImgs[] = str_replace('public/', '', $path);
+                            }
+                        }
+                    }
+
+                    // Trim to max 6 and save if we have any entries (including empty to clear all)
+                    $newImgs = array_slice($newImgs, 0, 6);
+                    $profile->imgs = !empty($newImgs) ? json_encode($newImgs, JSON_UNESCAPED_UNICODE) : json_encode([], JSON_UNESCAPED_UNICODE);
+                    $profile->save();
                 }
+            } catch (\Exception $e) {
+                \Log::error('Failed to update organization imgs per-slot:', ['id' => $id, 'error' => $e->getMessage()]);
             }
 
             DB::commit();

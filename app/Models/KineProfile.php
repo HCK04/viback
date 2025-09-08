@@ -19,6 +19,7 @@ class KineProfile extends Model
         'horaire_start',
         'horaire_end',
         'diplomas',
+        'diplomes',
         'adresse',
         'ville',
         'disponible',
