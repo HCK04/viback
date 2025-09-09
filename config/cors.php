@@ -1,5 +1,38 @@
 <?php
 
+$production = env('APP_ENV') === 'production' || env('APP_DEBUG') === false;
+
+// Allow only the frontend site in production (include punycode variants)
+$allowedOrigins = $production
+    ? [
+        'https://vi-santé.com',
+        'https://www.vi-santé.com',
+        'https://xn--vi-sant-hya.com',
+        'https://www.xn--vi-sant-hya.com',
+        'https://api.vi-santé.com',
+        'https://api.xn--vi-sant-hya.com',
+    ]
+    : [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:8000',
+        'http://localhost:8000',
+        'https://vi-santé.com',
+        'https://www.vi-santé.com',
+        'https://xn--vi-sant-hya.com',
+        'https://www.xn--vi-sant-hya.com',
+        'https://api.vi-santé.com',
+        'https://api.xn--vi-sant-hya.com',
+    ];
+
+$allowedMethods = $production
+    ? ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+    : ['*'];
+
+$allowedHeaders = $production
+    ? ['Content-Type', 'X-Requested-With', 'Authorization', 'Accept', 'Origin', 'Cache-Control', 'Pragma']
+    : ['*'];
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -16,34 +49,17 @@ return [
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => $allowedMethods,
 
-    'allowed_origins' => [
-        'http://localhost:3000',
-        'http://localhost:8000',
-        'https://vi-santé.com',
-        'https://api.vi-santé.com',
-        'https://xn--vi-sant-hya.com',
-        'https://api.xn--vi-sant-hya.com',
-        'https://vi-santé.com/api/medecins',
-        'https://vi-santé.com/api/appointments',
-        'https://vi-santé.com/api/organisations',
-        'https://api.vi-sant-hya.com/api/medecins',
-        'https://api.vi-sant-hya.com/api/appointments',
-        'https://api.vi-sant-hya.com/api/organisations',
-        'https://api.vi-sant-hya.com/api/check-availability',
-    ],
+    'allowed_origins' => $allowedOrigins,
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => [
-        '*',
-        'Authorization',
-    ],
+    'allowed_headers' => $allowedHeaders,
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    'max_age' => 3600,
 
     'supports_credentials' => false,
 

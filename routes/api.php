@@ -156,14 +156,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
     Route::get('/doctors/{id}/available-hours', [MedecinController::class, 'availableHours']);
     
-    // Stripe subscription routes
-    Route::prefix('stripe')->group(function () {
-        Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
-        Route::post('/verify-session', [StripeController::class, 'verifySession']);
-        Route::post('/cancel-subscription', [StripeController::class, 'cancelSubscription']);
-        Route::post('/customer-portal', [StripeController::class, 'customerPortal']);
-        Route::get('/subscription-details/{userId}', [StripeController::class, 'getSubscriptionDetails']);
-    });
+    // Stripe subscription routes (disabled in production)
+    // To re-enable, uncomment the block below and ensure proper keys are set.
+    // Route::prefix('stripe')->group(function () {
+    //     Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
+    //     Route::post('/verify-session', [StripeController::class, 'verifySession']);
+    //     Route::post('/cancel-subscription', [StripeController::class, 'cancelSubscription']);
+    //     Route::post('/customer-portal', [StripeController::class, 'customerPortal']);
+    //     Route::get('/subscription-details/{userId}', [StripeController::class, 'getSubscriptionDetails']);
+    // });
 
     // Admin routes
     Route::get('/admin/users', [UserController::class, 'index']);
@@ -173,8 +174,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/roles', [UserController::class, 'roles']);
 });
 
-// Stripe webhook (public route for Stripe to call)
-Route::post('/stripe/webhook', [StripeController::class, 'handleWebhook']);
+// Stripe webhook (disabled)
+// Route::post('/stripe/webhook', [StripeController::class, 'handleWebhook']);
 
 // Public doctor routes
 Route::get('/medecins/{id}', [MedecinController::class, 'show']);
