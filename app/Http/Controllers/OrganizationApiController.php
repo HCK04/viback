@@ -490,6 +490,9 @@ class OrganizationApiController extends Controller
                 'services' => 'nullable',
                 'description' => 'nullable|string|max:1000',
                 'org_presentation' => 'nullable|string|max:2000',
+                // Clinic-specific presentation fields (for clinics)
+                'clinic_presentation' => 'nullable|string|max:2000',
+                'clinic_services_description' => 'nullable|string|max:2000',
                 'services_description' => 'nullable|string|max:2000',
                 'additional_info' => 'nullable|string|max:1000',
                 'presentation' => 'nullable|string|max:2000',
@@ -516,6 +519,15 @@ class OrganizationApiController extends Controller
                 'imgs.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
                 'imgs_keep' => 'nullable|array',
                 'imgs_keep.*' => 'string|max:255',
+            ]);
+
+            \Log::info('Organization update input snapshot', [
+                'user_id' => $id,
+                'keys' => array_keys($validated),
+                'jours_disponibles_raw' => $request->input('jours_disponibles'),
+                'moyens_transport_raw' => $request->input('moyens_transport'),
+                'moyens_paiement_raw' => $request->input('moyens_paiement'),
+                'content_type' => $request->header('Content-Type')
             ]);
 
             $modelClass = $this->getModelClass($user->role->name);
@@ -581,6 +593,27 @@ class OrganizationApiController extends Controller
                 $updateData[$key] = $value;
             }
 
+            // Clinic-specific field syncing to be robust with various frontends
+            try {
+                $roleName = $user->role->name ?? null;
+                if ($roleName === 'clinique') {
+                    // If only services_description provided, mirror to clinic_services_description
+                    if (!array_key_exists('clinic_services_description', $updateData) && array_key_exists('services_description', $updateData)) {
+                        $updateData['clinic_services_description'] = $updateData['services_description'];
+                    }
+                    // If only clinic_services_description provided, mirror back to services_description too
+                    if (!array_key_exists('services_description', $updateData) && array_key_exists('clinic_services_description', $updateData)) {
+                        $updateData['services_description'] = $updateData['clinic_services_description'];
+                    }
+                    // Presentation: if only generic provided, mirror to clinic_presentation
+                    if (!array_key_exists('clinic_presentation', $updateData) && array_key_exists('presentation', $updateData)) {
+                        $updateData['clinic_presentation'] = $updateData['presentation'];
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Clinic field sync skipped', ['error' => $e->getMessage()]);
+            }
+
             // Add horaires field for organizations that have it
             if (in_array($user->role->name, ['pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'])) {
                 if (isset($validated['horaire_start']) && isset($validated['horaire_end'])) {
@@ -624,7 +657,20 @@ class OrganizationApiController extends Controller
                 unset($updateData['guard'], $updateData['guard_start_date'], $updateData['guard_end_date']);
             }
 
+            \Log::info('Organization update prepared data', [
+                'user_id' => $id,
+                'update_keys' => array_keys($updateData),
+                'user_update_keys' => array_keys($userUpdate),
+                'update_preview' => array_intersect_key($updateData, array_flip(['services','moyens_transport','moyens_paiement','jours_disponibles','informations_pratiques','contact_urgence']))
+            ]);
+
             $profile->update($updateData);
+
+            \Log::info('Organization profile updated persisted', [
+                'user_id' => $id,
+                'profile_id' => $profile->id,
+                'updated_at' => $profile->fresh()->updated_at,
+            ]);
 
             // Handle gallery updates per slot: combine kept paths and new files according to their indices (0..5)
             try {

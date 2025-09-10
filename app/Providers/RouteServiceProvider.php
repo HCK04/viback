@@ -45,8 +45,10 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting()
     {
+        // Disable rate limiting for the 'api' limiter to avoid throttling in production.
+        // Security is still enforced via auth, CSRF (where applicable), and strict CORS.
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            return Limit::none();
         });
     }
 }

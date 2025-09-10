@@ -26,15 +26,14 @@ class ClinicController extends Controller
                     'users.email',
                     'users.phone',
                     'users.role_id',
-                    // Prefer clinic profile address fields (avoid non-existent users.ville/adresse)
-                    'users.profile_image',
-                    
                     // Clinic-specific fields from clinique_profiles table
                     'clinique_profiles.nom_clinique',
                     'clinique_profiles.adresse as clinic_adresse',
                     'clinique_profiles.ville as clinic_ville',
                     'clinique_profiles.services',
                     'clinique_profiles.description',
+                    // Expose clinic profile images with friendly aliases
+                    'clinique_profiles.profile_image as profile_image',
                     'clinique_profiles.profile_image as clinic_profile_image',
                     'clinique_profiles.etablissement_image',
                     'clinique_profiles.rating as clinic_rating',
@@ -154,6 +153,11 @@ class ClinicController extends Controller
                     'clinique_profiles.nom_clinique',
                     'clinique_profiles.services',
                     'clinique_profiles.description',
+                    // Include images and gallery for search cards
+                    'clinique_profiles.profile_image as profile_image',
+                    'clinique_profiles.etablissement_image',
+                    'clinique_profiles.gallery',
+                    'clinique_profiles.imgs',
                     'clinique_profiles.clinic_presentation',
                     'clinique_profiles.clinic_services_description'
                 ])
@@ -167,6 +171,13 @@ class ClinicController extends Controller
                     } catch (\Exception $e) {
                         // Keep as string if JSON parsing fails
                     }
+                }
+                // Best-effort parse gallery/imgs (leave as-is if parsing fails)
+                if (isset($clinic->gallery) && is_string($clinic->gallery)) {
+                    try { $clinic->gallery = json_decode($clinic->gallery, true); } catch (\Exception $e) {}
+                }
+                if (isset($clinic->imgs) && is_string($clinic->imgs)) {
+                    try { $clinic->imgs = json_decode($clinic->imgs, true); } catch (\Exception $e) {}
                 }
             }
 
