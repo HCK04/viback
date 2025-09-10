@@ -20,6 +20,7 @@ use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\ProfessionalProfileController;
 use App\Http\Controllers\PharmacyApiController;
 use App\Http\Controllers\PharmacyProfileController;
+use App\Http\Controllers\ParapharmacyApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,6 +51,14 @@ Route::prefix('pharmacies')->group(function () {
     Route::get('/search', [PharmacyApiController::class, 'searchByCity']);
     Route::get('/{id}', [PharmacyApiController::class, 'show']);
     Route::get('/slug/{slug}', [PharmacyApiController::class, 'showBySlug']);
+});
+
+// Parapharmacy routes (public - no authentication required)
+Route::prefix('parapharmacies')->group(function () {
+    Route::get('/', [ParapharmacyApiController::class, 'index']);
+    Route::get('/search', [ParapharmacyApiController::class, 'searchByCity']);
+    Route::get('/{id}', [ParapharmacyApiController::class, 'show']);
+    Route::get('/slug/{slug}', [ParapharmacyApiController::class, 'showBySlug']);
 });
 
 // Statistics routes for auto-incrementing counters
