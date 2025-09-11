@@ -21,6 +21,7 @@ use App\Http\Controllers\ProfessionalProfileController;
 use App\Http\Controllers\PharmacyApiController;
 use App\Http\Controllers\PharmacyProfileController;
 use App\Http\Controllers\ParapharmacyApiController;
+use App\Http\Controllers\ProfileSlugController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +74,8 @@ Route::get('/organizations', [OrganizationApiController::class, 'index']);
 Route::get('/organizations/search', [OrganizationApiController::class, 'search']);
 Route::get('/organizations/{id}', [OrganizationApiController::class, 'show']);
 Route::get('/users/{id}', [UserController::class, 'publicShow']);
+// Universal slug-based profile resolver (professionals + organizations)
+Route::get('/profiles/slug/{slug}', [ProfileSlugController::class, 'showBySlug']);
 
 // Universal profile endpoints - auto-detect profile type
 Route::get('/profiles/{id}', [App\Http\Controllers\ProfileController::class, 'show']);

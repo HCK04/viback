@@ -23,6 +23,7 @@ class ParapharmacyApiController extends Controller
             }
             $tbl = 'parapharmacie_profiles';
             $has = function ($col) use ($tbl) { return Schema::hasColumn($tbl, $col); };
+            $hasUser = function ($col) { return Schema::hasColumn('users', $col); };
             $select = [
                 'users.id',
                 DB::raw("$tbl.id as parapharmacie_id"),
@@ -48,9 +49,9 @@ class ParapharmacyApiController extends Controller
                 $has('absence_start_date') ? "$tbl.absence_start_date" : DB::raw("NULL as absence_start_date"),
                 $has('absence_end_date') ? "$tbl.absence_end_date" : DB::raw("NULL as absence_end_date"),
                 $has('vacation_auto_reactivate_date') ? "$tbl.vacation_auto_reactivate_date" : DB::raw("NULL as vacation_auto_reactivate_date"),
-                'users.email',
-                'users.phone',
-                'users.is_verified',
+                $hasUser('email') ? 'users.email' : DB::raw("NULL as email"),
+                $hasUser('phone') ? 'users.phone' : DB::raw("NULL as phone"),
+                $hasUser('is_verified') ? 'users.is_verified' : DB::raw("0 as is_verified"),
                 "$tbl.created_at",
                 "$tbl.updated_at",
             ];
@@ -122,7 +123,8 @@ class ParapharmacyApiController extends Controller
             }
             $ville = $request->get('ville');
             $tbl = 'parapharmacie_profiles';
-            $has = fn($col) => Schema::hasColumn($tbl, $col);
+            $has = function ($col) use ($tbl) { return Schema::hasColumn($tbl, $col); };
+            $hasUser = function ($col) { return Schema::hasColumn('users', $col); };
 
             $select = [
                 'users.id',
@@ -149,9 +151,9 @@ class ParapharmacyApiController extends Controller
                 $has('absence_start_date') ? "$tbl.absence_start_date" : DB::raw("NULL as absence_start_date"),
                 $has('absence_end_date') ? "$tbl.absence_end_date" : DB::raw("NULL as absence_end_date"),
                 $has('vacation_auto_reactivate_date') ? "$tbl.vacation_auto_reactivate_date" : DB::raw("NULL as vacation_auto_reactivate_date"),
-                'users.email',
-                'users.phone',
-                'users.is_verified',
+                $hasUser('email') ? 'users.email' : DB::raw("NULL as email"),
+                $hasUser('phone') ? 'users.phone' : DB::raw("NULL as phone"),
+                $hasUser('is_verified') ? 'users.is_verified' : DB::raw("0 as is_verified"),
                 "$tbl.created_at",
                 "$tbl.updated_at"
             ];
@@ -233,44 +235,21 @@ class ParapharmacyApiController extends Controller
             }
             $tbl = 'parapharmacie_profiles';
             $has = function ($col) use ($tbl) { return Schema::hasColumn($tbl, $col); };
+            $hasUser = function ($col) { return Schema::hasColumn('users', $col); };
             $p = DB::table($tbl)
                 ->join('users', "$tbl.user_id", '=', 'users.id')
-                ->where("$tbl.user_id", $id)
+                ->where(function($q) use ($tbl, $id) {
+                    $q->where("$tbl.user_id", $id)
+                      ->orWhere("$tbl.id", $id);
+                })
                 ->select(
-                    'users.id',
-                    'users.name',
+                    DB::raw("$tbl.*"),
                     DB::raw("$tbl.id as parapharmacie_id"),
-                    "$tbl.nom_parapharmacie",
-                    "$tbl.adresse",
-                    $has('ville') ? "$tbl.ville" : DB::raw("NULL as ville"),
-                    $has('services') ? "$tbl.services" : DB::raw("NULL as services"),
-                    $has('description') ? "$tbl.description" : DB::raw("NULL as description"),
-                    $has('org_presentation') ? "$tbl.org_presentation" : DB::raw("NULL as org_presentation"),
-                    $has('services_description') ? "$tbl.services_description" : DB::raw("NULL as services_description"),
-                    $has('responsable_name') ? "$tbl.responsable_name" : ($has('gerant_name') ? DB::raw("$tbl.gerant_name as responsable_name") : DB::raw("NULL as responsable_name")),
-                    $has('horaire_start') ? "$tbl.horaire_start" : DB::raw("NULL as horaire_start"),
-                    $has('horaire_end') ? "$tbl.horaire_end" : DB::raw("NULL as horaire_end"),
-                    $has('rating') ? "$tbl.rating" : DB::raw("0 as rating"),
-                    $has('etablissement_image') ? "$tbl.etablissement_image" : DB::raw("NULL as etablissement_image"),
-                    $has('profile_image') ? "$tbl.profile_image" : DB::raw("NULL as profile_image"),
-                    $has('gallery') ? "$tbl.gallery" : DB::raw("NULL as gallery"),
-                    $has('imgs') ? "$tbl.imgs" : DB::raw("NULL as imgs"),
-                    $has('disponible') ? "$tbl.disponible" : DB::raw("1 as disponible"),
-                    $has('vacation_mode') ? "$tbl.vacation_mode" : DB::raw("0 as vacation_mode"),
-                    $has('vacation_auto_reactivate_date') ? "$tbl.vacation_auto_reactivate_date" : DB::raw("NULL as vacation_auto_reactivate_date"),
-                    $has('absence_start_date') ? "$tbl.absence_start_date" : DB::raw("NULL as absence_start_date"),
-                    $has('absence_end_date') ? "$tbl.absence_end_date" : DB::raw("NULL as absence_end_date"),
-                    $has('contact_urgence') ? "$tbl.contact_urgence" : DB::raw("NULL as contact_urgence"),
-                    $has('moyens_paiement') ? "$tbl.moyens_paiement" : DB::raw("NULL as moyens_paiement"),
-                    $has('moyens_transport') ? "$tbl.moyens_transport" : DB::raw("NULL as moyens_transport"),
-                    $has('informations_pratiques') ? "$tbl.informations_pratiques" : DB::raw("NULL as informations_pratiques"),
-                    $has('jours_disponibles') ? "$tbl.jours_disponibles" : DB::raw("NULL as jours_disponibles"),
-                    $has('additional_info') ? "$tbl.additional_info" : DB::raw("NULL as additional_info"),
-                    'users.email',
-                    'users.phone',
-                    'users.is_verified',
-                    "$tbl.created_at",
-                    "$tbl.updated_at"
+                    DB::raw("users.id as user_id"),
+                    'users.name',
+                    ($hasUser('email') ? 'users.email' : DB::raw("NULL as email")),
+                    ($hasUser('phone') ? 'users.phone' : DB::raw("NULL as phone")),
+                    ($hasUser('is_verified') ? 'users.is_verified' : DB::raw("0 as is_verified"))
                 )
                 ->first();
 
@@ -279,7 +258,7 @@ class ParapharmacyApiController extends Controller
             }
 
             $resp = [
-                'id' => $p->id,
+                'id' => $p->user_id,
                 'parapharmacie_id' => $p->parapharmacie_id,
                 'name' => $p->name,
                 'nom_parapharmacie' => $p->nom_parapharmacie,
@@ -378,7 +357,9 @@ class ParapharmacyApiController extends Controller
                     $has('vacation_auto_reactivate_date') ? "$tbl.vacation_auto_reactivate_date" : DB::raw("NULL as vacation_auto_reactivate_date"),
                     $has('absence_start_date') ? "$tbl.absence_start_date" : DB::raw("NULL as absence_start_date"),
                     $has('absence_end_date') ? "$tbl.absence_end_date" : DB::raw("NULL as absence_end_date"),
-                    'users.email', 'users.phone', 'users.is_verified',
+                    ($hasUser('email') ? 'users.email' : DB::raw("NULL as email")),
+                    ($hasUser('phone') ? 'users.phone' : DB::raw("NULL as phone")),
+                    ($hasUser('is_verified') ? 'users.is_verified' : DB::raw("0 as is_verified")),
                     "$tbl.created_at", "$tbl.updated_at"
                 )
                 ->first();
