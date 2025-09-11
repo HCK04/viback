@@ -234,65 +234,69 @@ class ParapharmacyApiController extends Controller
                 return response()->json(['message' => 'Parapharmacie not found'], 404);
             }
             $tbl = 'parapharmacie_profiles';
-            $has = function ($col) use ($tbl) { return Schema::hasColumn($tbl, $col); };
-            $hasUser = function ($col) { return Schema::hasColumn('users', $col); };
-            $p = DB::table($tbl)
-                ->join('users', "$tbl.user_id", '=', 'users.id')
-                ->where(function($q) use ($tbl, $id) {
-                    $q->where("$tbl.user_id", $id)
-                      ->orWhere("$tbl.id", $id);
-                })
-                ->select(
-                    DB::raw("$tbl.*"),
-                    DB::raw("$tbl.id as parapharmacie_id"),
-                    DB::raw("users.id as user_id"),
-                    'users.name',
-                    ($hasUser('email') ? 'users.email' : DB::raw("NULL as email")),
-                    ($hasUser('phone') ? 'users.phone' : DB::raw("NULL as phone")),
-                    ($hasUser('is_verified') ? 'users.is_verified' : DB::raw("0 as is_verified"))
-                )
+            // 1) Fetch profile by user_id OR by profile id
+            $profile = DB::table($tbl)
+                ->where("$tbl.user_id", $id)
+                ->orWhere("$tbl.id", $id)
                 ->first();
 
-            if (!$p) {
+            if (!$profile) {
                 return response()->json(['message' => 'Parapharmacie not found'], 404);
             }
 
+            // 2) Fetch user separately for robust compatibility across schemas
+            $user = null;
+            if (Schema::hasTable('users')) {
+                $hasUser = function ($col) { return Schema::hasColumn('users', $col); };
+                $user = DB::table('users')
+                    ->where('id', $profile->user_id)
+                    ->select(
+                        'id',
+                        'name',
+                        $hasUser('email') ? 'email' : DB::raw('NULL as email'),
+                        $hasUser('phone') ? 'phone' : DB::raw('NULL as phone'),
+                        $hasUser('is_verified') ? 'is_verified' : DB::raw('0 as is_verified')
+                    )
+                    ->first();
+            }
+
+            // 3) Build safe response
             $resp = [
-                'id' => $p->user_id,
-                'parapharmacie_id' => $p->parapharmacie_id,
-                'name' => $p->name,
-                'nom_parapharmacie' => $p->nom_parapharmacie,
-                'adresse' => $p->adresse,
-                'ville' => $p->ville,
-                'services' => json_decode($p->services, true) ?: [],
-                'description' => $p->description,
-                'org_presentation' => $p->org_presentation,
-                'services_description' => $p->services_description,
-                'responsable_name' => $p->responsable_name,
-                'horaire_start' => $p->horaire_start,
-                'horaire_end' => $p->horaire_end,
-                'rating' => (float) $p->rating,
-                'moyens_paiement' => $p->moyens_paiement ? (json_decode($p->moyens_paiement, true) ?: []) : [],
-                'moyens_transport' => $p->moyens_transport ? (json_decode($p->moyens_transport, true) ?: []) : [],
-                'informations_pratiques' => $p->informations_pratiques,
-                'jours_disponibles' => $p->jours_disponibles ? (json_decode($p->jours_disponibles, true) ?: []) : [],
-                'contact_urgence' => $p->contact_urgence,
-                'etablissement_image' => $p->etablissement_image,
-                'profile_image' => $p->profile_image,
-                'gallery' => json_decode($p->gallery, true) ?: [],
-                'imgs' => json_decode($p->imgs, true) ?: [],
-                'disponible' => (bool) $p->disponible,
-                'vacation_mode' => (bool) $p->vacation_mode,
-                'vacation_auto_reactivate_date' => $p->vacation_auto_reactivate_date,
-                'absence_start_date' => $p->absence_start_date,
-                'absence_end_date' => $p->absence_end_date,
-                'additional_info' => $p->additional_info,
+                'id' => $user->id ?? $profile->user_id,
+                'parapharmacie_id' => $profile->id ?? null,
+                'name' => $user->name ?? null,
+                'nom_parapharmacie' => $profile->nom_parapharmacie ?? null,
+                'adresse' => $profile->adresse ?? null,
+                'ville' => $profile->ville ?? null,
+                'services' => isset($profile->services) ? (json_decode($profile->services, true) ?: []) : [],
+                'description' => $profile->description ?? null,
+                'org_presentation' => $profile->org_presentation ?? null,
+                'services_description' => $profile->services_description ?? null,
+                'responsable_name' => $profile->responsable_name ?? ($profile->gerant_name ?? null),
+                'horaire_start' => $profile->horaire_start ?? null,
+                'horaire_end' => $profile->horaire_end ?? null,
+                'rating' => isset($profile->rating) ? (float) $profile->rating : 0.0,
+                'moyens_paiement' => isset($profile->moyens_paiement) ? (json_decode($profile->moyens_paiement, true) ?: []) : [],
+                'moyens_transport' => isset($profile->moyens_transport) ? (json_decode($profile->moyens_transport, true) ?: []) : [],
+                'informations_pratiques' => $profile->informations_pratiques ?? null,
+                'jours_disponibles' => isset($profile->jours_disponibles) ? (json_decode($profile->jours_disponibles, true) ?: []) : [],
+                'contact_urgence' => $profile->contact_urgence ?? null,
+                'etablissement_image' => $profile->etablissement_image ?? null,
+                'profile_image' => $profile->profile_image ?? null,
+                'gallery' => isset($profile->gallery) ? (json_decode($profile->gallery, true) ?: []) : [],
+                'imgs' => isset($profile->imgs) ? (json_decode($profile->imgs, true) ?: []) : [],
+                'disponible' => isset($profile->disponible) ? (bool) $profile->disponible : true,
+                'vacation_mode' => isset($profile->vacation_mode) ? (bool) $profile->vacation_mode : false,
+                'vacation_auto_reactivate_date' => $profile->vacation_auto_reactivate_date ?? null,
+                'absence_start_date' => $profile->absence_start_date ?? null,
+                'absence_end_date' => $profile->absence_end_date ?? null,
+                'additional_info' => $profile->additional_info ?? null,
                 'type' => 'parapharmacie',
-                'email' => $p->email,
-                'phone' => $p->phone,
-                'is_verified' => (bool) $p->is_verified,
-                'created_at' => $p->created_at,
-                'updated_at' => $p->updated_at,
+                'email' => $user->email ?? null,
+                'phone' => $user->phone ?? null,
+                'is_verified' => (bool)($user->is_verified ?? 0),
+                'created_at' => $profile->created_at ?? null,
+                'updated_at' => $profile->updated_at ?? null,
             ];
 
             return response()->json($resp);
