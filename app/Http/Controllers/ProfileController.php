@@ -89,10 +89,62 @@ class ProfileController extends Controller
 
     private function formatDoctorProfile($user, $profile)
     {
-        // Parse arrays
+        // Robust array parser (handles JSON strings/arrays/CSV/escaped JSON/newlines)
+        $parseArray = function ($value) {
+            if ($value === null) return [];
+            if (is_array($value)) return array_values(array_filter($value, fn($v) => $v !== null && $v !== ''));
+            if (is_string($value)) {
+                $s = trim($value);
+                if ($s === '') return [];
+                // Try JSON
+                $decoded = json_decode($s, true);
+                if (is_array($decoded)) return array_values(array_filter($decoded, fn($v) => $v !== null && $v !== ''));
+                // Try unescaped JSON if double-escaped or with newlines
+                $s2 = str_replace(["\r", "\n"], ["\\r", "\\n"], $s);
+                $decoded2 = json_decode($s2, true);
+                if (is_array($decoded2)) return array_values(array_filter($decoded2, fn($v) => $v !== null && $v !== ''));
+                // Extract quoted segments if format like "[\"A\"\n\"B\"]"
+                if (preg_match_all('/"(?:\\.|[^"\\])*"/u', $s, $m) && !empty($m[0])) {
+                    $items = array_map(function ($q) {
+                        $v = @json_decode($q, true);
+                        return $v !== null ? $v : trim($q, '"');
+                    }, $m[0]);
+                    $items = array_values(array_filter($items, fn($v) => $v !== null && $v !== ''));
+                    if (!empty($items)) return $items;
+                }
+                // Fallback split by newlines/semicolons/commas
+                if (strpos($s, "\n") !== false) {
+                    $parts = preg_split('/\n+/', $s);
+                    return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
+                }
+                if (strpos($s, ';') !== false) {
+                    $parts = explode(';', $s);
+                    return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
+                }
+                if (strpos($s, ',') !== false) {
+                    $parts = explode(',', $s);
+                    return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
+                }
+                return [$s];
+            }
+            return [];
+        };
+
+        // Parse specialties
         $specialties = [];
         if ($profile->specialty) {
-            $specialties = json_decode($profile->specialty, true) ?: [$profile->specialty];
+            $specialties = $parseArray($profile->specialty);
+        }
+
+        // Parse imgs JSON if present
+        $imgs = [];
+        if (isset($profile->imgs) && $profile->imgs) {
+            try {
+                $decoded = json_decode($profile->imgs, true);
+                $imgs = is_array($decoded) ? $decoded : [];
+            } catch (\Exception $e) {
+                $imgs = [];
+            }
         }
 
         return [
@@ -119,7 +171,16 @@ class ProfileController extends Controller
             'moyens_paiement' => isset($profile->moyens_paiement) ? $parseArray($profile->moyens_paiement) : [],
             'moyens_transport' => isset($profile->moyens_transport) ? $parseArray($profile->moyens_transport) : [],
             'jours_disponibles' => isset($profile->jours_disponibles) ? $parseArray($profile->jours_disponibles) : [],
-            'diplomes' => isset($profile->diplomes) ? $parseArray($profile->diplomes) : [],
+            // Diplomas with fallback to legacy 'diplomas' column
+            'diplomes' => (function() use ($profile, $parseArray) {
+                if (isset($profile->diplomes) && $profile->diplomes !== null && $profile->diplomes !== '') {
+                    return $parseArray($profile->diplomes);
+                }
+                if (isset($profile->diplomas) && $profile->diplomas !== null && $profile->diplomas !== '') {
+                    return $parseArray($profile->diplomas);
+                }
+                return [];
+            })(),
             'experiences' => isset($profile->experiences) ? $parseArray($profile->experiences) : [],
             'disponible' => $profile->disponible ?? true,
             'vacation_mode' => $profile->vacation_mode ?? false,
@@ -321,7 +382,15 @@ class ProfileController extends Controller
             'moyens_paiement' => isset($profile->moyens_paiement) ? $parseArray($profile->moyens_paiement) : [],
             'moyens_transport' => isset($profile->moyens_transport) ? $parseArray($profile->moyens_transport) : [],
             'jours_disponibles' => isset($profile->jours_disponibles) ? $parseArray($profile->jours_disponibles) : [],
-            'diplomes' => isset($profile->diplomes) ? $parseArray($profile->diplomes) : [],
+            'diplomes' => (function() use ($profile, $parseArray) {
+                if (isset($profile->diplomes) && $profile->diplomes !== null && $profile->diplomes !== '') {
+                    return $parseArray($profile->diplomes);
+                }
+                if (isset($profile->diplomas) && $profile->diplomas !== null && $profile->diplomas !== '') {
+                    return $parseArray($profile->diplomas);
+                }
+                return [];
+            })(),
             'experiences' => isset($profile->experiences) ? $parseArray($profile->experiences) : [],
             'disponible' => $profile->disponible ?? true,
             'vacation_mode' => $profile->vacation_mode ?? false,

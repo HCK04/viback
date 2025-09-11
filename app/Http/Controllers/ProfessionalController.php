@@ -147,8 +147,11 @@ class ProfessionalController extends Controller
         }
 
         $diplomes = [];
-        if (isset($profile->diplomes)) {
+        if (isset($profile->diplomes) && $profile->diplomes !== null && $profile->diplomes !== '') {
             $diplomes = $parseArray($profile->diplomes);
+        } elseif (isset($profile->diplomas) && $profile->diplomas !== null && $profile->diplomas !== '') {
+            // Fallback for legacy column name
+            $diplomes = $parseArray($profile->diplomas);
         }
 
         $experiences = [];

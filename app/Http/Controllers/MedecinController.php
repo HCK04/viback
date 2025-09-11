@@ -55,6 +55,12 @@ class MedecinController extends Controller
                             return $raw;
                         }
                     })(),
+                    // CV fields (exposed on public endpoint as requested)
+                    'diplomes' => (function() use ($profile) {
+                        $raw = $profile->diplomes ?? ($profile->diplomas ?? null);
+                        return $raw; // keep raw (string JSON or array); frontend handles parsing
+                    })(),
+                    'experiences' => $profile->experiences ?? null,
                     'is_verified' => $profile->user->is_verified,
                     'created_at' => $profile->user->created_at
                 ]);
@@ -203,7 +209,7 @@ class MedecinController extends Controller
             // CV fields
             'presentation' => $profile->presentation ?? null,
             'carte_professionnelle' => $profile->carte_professionnelle ?? null,
-            'diplomes' => $profile->diplomes ?? null,
+            'diplomes' => ($profile->diplomes ?? ($profile->diplomas ?? null)),
             'experiences' => $profile->experiences ?? null,
             'additional_info' => $profile->additional_info ?? null,
             // New profile fields

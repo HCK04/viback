@@ -139,6 +139,7 @@ class ProfileSlugController extends Controller
                                 $has('experience_years') ? "$t.experience_years" : DB::raw("NULL as experience_years"),
                                 $has('adresse') ? "$t.adresse" : DB::raw("NULL as adresse"),
                                 $has('ville') ? "$t.ville" : DB::raw("NULL as ville"),
+                                $has('horaires') ? "$t.horaires" : DB::raw("NULL as horaires"),
                                 $has('horaire_start') ? "$t.horaire_start" : DB::raw("NULL as horaire_start"),
                                 $has('horaire_end') ? "$t.horaire_end" : DB::raw("NULL as horaire_end"),
                                 $has('presentation') ? "$t.presentation" : DB::raw("NULL as presentation"),
@@ -152,6 +153,8 @@ class ProfileSlugController extends Controller
                                 $has('informations_pratiques') ? "$t.informations_pratiques" : DB::raw("NULL as informations_pratiques"),
                                 $has('jours_disponibles') ? "$t.jours_disponibles" : DB::raw("NULL as jours_disponibles"),
                                 $has('contact_urgence') ? "$t.contact_urgence" : DB::raw("NULL as contact_urgence"),
+                                $has('diplomes') ? "$t.diplomes" : DB::raw("NULL as diplomes"),
+                                $has('experiences') ? "$t.experiences" : DB::raw("NULL as experiences"),
                                 $has('disponible') ? "$t.disponible" : DB::raw("1 as disponible")
                             )
                             ->first();
@@ -165,8 +168,24 @@ class ProfileSlugController extends Controller
                                 'experience_years' => $p->experience_years,
                                 'adresse' => $p->adresse,
                                 'ville' => $p->ville,
-                                'horaire_start' => $p->horaire_start,
-                                'horaire_end' => $p->horaire_end,
+                                // Include horaires JSON and derive start/end if missing
+                                'horaires' => $p->horaires ? (json_decode($p->horaires, true) ?: $p->horaires) : null,
+                                'horaire_start' => (function() use ($p) {
+                                    if (!empty($p->horaire_start)) return $p->horaire_start;
+                                    if (!empty($p->horaires)) {
+                                        $h = json_decode($p->horaires, true);
+                                        if (is_array($h) && isset($h['start'])) return $h['start'];
+                                    }
+                                    return null;
+                                })(),
+                                'horaire_end' => (function() use ($p) {
+                                    if (!empty($p->horaire_end)) return $p->horaire_end;
+                                    if (!empty($p->horaires)) {
+                                        $h = json_decode($p->horaires, true);
+                                        if (is_array($h) && isset($h['end'])) return $h['end'];
+                                    }
+                                    return null;
+                                })(),
                                 'presentation' => $p->presentation,
                                 'additional_info' => $p->additional_info,
                                 'profile_image' => $p->profile_image,
@@ -178,6 +197,9 @@ class ProfileSlugController extends Controller
                                 'informations_pratiques' => $p->informations_pratiques,
                                 'jours_disponibles' => $p->jours_disponibles ? (json_decode($p->jours_disponibles, true) ?: []) : [],
                                 'contact_urgence' => $p->contact_urgence,
+                                // CV fields
+                                'diplomes' => $p->diplomes ? (json_decode($p->diplomes, true) ?: $p->diplomes) : [],
+                                'experiences' => $p->experiences ? (json_decode($p->experiences, true) ?: $p->experiences) : [],
                                 'disponible' => (bool)$p->disponible,
                                 'email' => $user->email,
                                 'phone' => $user->phone,
