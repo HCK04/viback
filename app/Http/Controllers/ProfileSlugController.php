@@ -51,8 +51,14 @@ class ProfileSlugController extends Controller
                         $has('org_presentation') ? "$tbl.org_presentation" : DB::raw("NULL as org_presentation"),
                         $has('services_description') ? "$tbl.services_description" : DB::raw("NULL as services_description"),
                         $has('responsable_name') ? "$tbl.responsable_name" : ($has('gerant_name') ? DB::raw("$tbl.gerant_name as responsable_name") : DB::raw("NULL as responsable_name")),
+                        $has('horaires') ? "$tbl.horaires" : DB::raw("NULL as horaires"),
                         $has('horaire_start') ? "$tbl.horaire_start" : DB::raw("NULL as horaire_start"),
                         $has('horaire_end') ? "$tbl.horaire_end" : DB::raw("NULL as horaire_end"),
+                        $has('moyens_paiement') ? "$tbl.moyens_paiement" : DB::raw("NULL as moyens_paiement"),
+                        $has('moyens_transport') ? "$tbl.moyens_transport" : DB::raw("NULL as moyens_transport"),
+                        $has('informations_pratiques') ? "$tbl.informations_pratiques" : DB::raw("NULL as informations_pratiques"),
+                        $has('jours_disponibles') ? "$tbl.jours_disponibles" : DB::raw("NULL as jours_disponibles"),
+                        $has('contact_urgence') ? "$tbl.contact_urgence" : DB::raw("NULL as contact_urgence"),
                         $has('rating') ? "$tbl.rating" : DB::raw("0 as rating"),
                         $has('guard') ? "$tbl.guard" : DB::raw("0 as guard"),
                         $has('etablissement_image') ? "$tbl.etablissement_image" : DB::raw("NULL as etablissement_image"),
@@ -80,8 +86,22 @@ class ProfileSlugController extends Controller
                         'org_presentation' => $row->org_presentation,
                         'services_description' => $row->services_description,
                         'responsable_name' => $row->responsable_name,
-                        'horaire_start' => $row->horaire_start,
-                        'horaire_end' => $row->horaire_end,
+                        // horaires and start/end (fallback from horaires if needed)
+                        'horaires' => $row->horaires ? (json_decode($row->horaires, true) ?: $row->horaires) : null,
+                        'horaire_start' => $row->horaire_start ?: (function() use ($row) {
+                            if (!empty($row->horaires)) { $h = json_decode($row->horaires, true); if (is_array($h) && isset($h['start'])) return $h['start']; }
+                            return null;
+                        })(),
+                        'horaire_end' => $row->horaire_end ?: (function() use ($row) {
+                            if (!empty($row->horaires)) { $h = json_decode($row->horaires, true); if (is_array($h) && isset($h['end'])) return $h['end']; }
+                            return null;
+                        })(),
+                        // practical fields
+                        'moyens_paiement' => $row->moyens_paiement ? (json_decode($row->moyens_paiement, true) ?: []) : [],
+                        'moyens_transport' => $row->moyens_transport ? (json_decode($row->moyens_transport, true) ?: []) : [],
+                        'informations_pratiques' => $row->informations_pratiques,
+                        'jours_disponibles' => $row->jours_disponibles ? (json_decode($row->jours_disponibles, true) ?: []) : [],
+                        'contact_urgence' => $row->contact_urgence,
                         'rating' => (float)$row->rating,
                         'etablissement_image' => $row->etablissement_image,
                         'profile_image' => $row->profile_image,
