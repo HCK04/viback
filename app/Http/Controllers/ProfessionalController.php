@@ -192,6 +192,8 @@ class ProfessionalController extends Controller
                 $imgs = [];
             }
         }
+        // Normalize images to '/storage/...'
+        $imgs = array_map([$this, 'normalizeMediaPath'], $imgs);
 
         $joursDisponibles = [];
         if (isset($profile->jours_disponibles)) {
@@ -207,6 +209,7 @@ class ProfessionalController extends Controller
         if (($profileImage === null || $profileImage === '') && $user->role_name === 'psychologue' && !empty($imgs)) {
             $profileImage = $imgs[0];
         }
+        $profileImageNorm = $this->normalizeMediaPath($profileImage);
 
         return [
             'id' => $user->id,
@@ -225,7 +228,7 @@ class ProfessionalController extends Controller
             'presentation' => $profile->presentation ?? null,
             'additional_info' => $profile->additional_info ?? null,
             'informations_pratiques' => $profile->informations_pratiques ?? null,
-            'profile_image' => $profileImage,
+            'profile_image' => $profileImageNorm,
             'horaire_start' => $profile->horaire_start ?? null,
             'horaire_end' => $profile->horaire_end ?? null,
             'imgs' => $imgs,
@@ -289,6 +292,8 @@ class ProfessionalController extends Controller
         } elseif (isset($profile->etablissement_image) && $profile->etablissement_image) {
             $galleryImages = [$profile->etablissement_image];
         }
+        // Normalize gallery images
+        $galleryImages = array_map([$this, 'normalizeMediaPath'], $galleryImages);
 
         $horaires = [];
         if (isset($profile->horaires) && $profile->horaires) {
@@ -326,6 +331,7 @@ class ProfessionalController extends Controller
                 $imgs = [];
             }
         }
+        $imgs = array_map([$this, 'normalizeMediaPath'], $imgs);
 
         return [
             'id' => $user->id,
@@ -349,8 +355,8 @@ class ProfessionalController extends Controller
             'contact_urgence' => $profile->contact_urgence ?? null,
             'gallery' => $galleryImages,
             'imgs' => $imgs,
-            'etablissement_image' => $profile->etablissement_image ?? null,
-            'profile_image' => $profile->profile_image ?? null,
+            'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? null),
+            'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
             'horaires' => $horaires,
             'horaire_start' => $profile->horaire_start ?? null,
             'horaire_end' => $profile->horaire_end ?? null,
@@ -389,5 +395,39 @@ class ProfessionalController extends Controller
             'is_verified' => $user->is_verified ?? false,
             'created_at' => $user->created_at
         ];
+    }
+
+    /**
+     * Normalize a stored media path to a web-accessible '/storage/...' URL path.
+     */
+    private function normalizeMediaPath($path)
+    {
+        if ($path === null || $path === '') {
+            return $path;
+        }
+        $p = str_replace('\\', '/', (string) $path);
+        $p = ltrim($p);
+        // Absolute URL stays as-is
+        if (preg_match('#^https?://#i', $p)) {
+            return $p;
+        }
+        // Strip known prefixes
+        $p = preg_replace('#^/storage/public/#i', '', $p);
+        $p = preg_replace('#^storage/public/#i', '', $p);
+        $p = preg_replace('#^/public/#i', '', $p);
+        $p = preg_replace('#^public/#i', '', $p);
+        $p = preg_replace('#^/storage/#i', '', $p);
+        $p = preg_replace('#^storage/#i', '', $p);
+        $p2 = ltrim($p, '/');
+        // Known public disk directories -> serve under /storage
+        if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Heuristic: image files default to /storage
+        if (preg_match('#\.(png|jpe?g|webp|gif|bmp|svg)$#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Fallback: ensure leading slash
+        return '/' . $p2;
     }
 }

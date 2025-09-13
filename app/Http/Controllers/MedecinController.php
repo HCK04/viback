@@ -27,6 +27,19 @@ class MedecinController extends Controller
         foreach ($profileTypes as $table => $model) {
             $profile = $model::with('user')->where('user_id', $id)->first();
             if ($profile && $profile->user) {
+                // Normalize imgs to array of '/storage/...' paths if possible
+                $normalizeImgs = function($raw) {
+                    if (!$raw) return null;
+                    try {
+                        $parsed = json_decode($raw, true);
+                        if (is_array($parsed)) {
+                            return array_map([$this, 'normalizeMediaPath'], $parsed);
+                        }
+                    } catch (\Throwable $e) {}
+                    // Keep string but normalize path
+                    return $this->normalizeMediaPath($raw);
+                };
+
                 return response()->json([
                     'id' => $profile->user->id,
                     'name' => $profile->user->name,
@@ -43,18 +56,9 @@ class MedecinController extends Controller
                     'rating' => $profile->rating ?? 0,
                     'presentation' => $profile->presentation ?? null,
                     'additional_info' => $profile->additional_info ?? null,
-                    'profile_image' => $profile->profile_image ?? null,
+                    'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
                     // Expose gallery images; keep as array if JSON, otherwise raw string
-                    'imgs' => (function() use ($profile) {
-                        $raw = $profile->imgs ?? null;
-                        if (!$raw) return null;
-                        try {
-                            $parsed = json_decode($raw, true);
-                            return is_array($parsed) ? $parsed : $raw;
-                        } catch (\Throwable $e) {
-                            return $raw;
-                        }
-                    })(),
+                    'imgs' => $normalizeImgs($profile->imgs ?? null),
                     // CV fields (exposed on public endpoint as requested)
                     'diplomes' => (function() use ($profile) {
                         $raw = $profile->diplomes ?? ($profile->diplomas ?? null);
@@ -97,7 +101,7 @@ class MedecinController extends Controller
                 'role' => 'Médecin',
                 'specialty' => $profile->specialty ?? 'Médecine générale',
                 'experience' => $profile->experience_years,
-                'profile_image' => $profile->profile_image ?? null,
+                'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
@@ -113,7 +117,7 @@ class MedecinController extends Controller
                 'role' => 'Kinésithérapeute',
                 'specialty' => $profile->specialty ?? 'Kinésithérapie',
                 'experience' => $profile->experience_years,
-                'profile_image' => $profile->profile_image ?? null,
+                'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
@@ -129,7 +133,7 @@ class MedecinController extends Controller
                 'role' => 'Orthophoniste',
                 'specialty' => $profile->specialty ?? 'Orthophonie',
                 'experience' => $profile->experience_years,
-                'profile_image' => $profile->profile_image ?? null,
+                'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
@@ -145,7 +149,7 @@ class MedecinController extends Controller
                 'role' => 'Psychologue',
                 'specialty' => $profile->specialty ?? 'Psychologie',
                 'experience' => $profile->experience_years,
-                'profile_image' => $profile->profile_image ?? null,
+                'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
                 'adresse' => $profile->adresse ?? null,
                 'disponible' => $profile->disponible,
                 'horaires' => $profile->horaires ?? null,
@@ -180,6 +184,18 @@ class MedecinController extends Controller
         }
 
         // Compose response with complete profile data including CV fields
+        // Normalize imgs similarly to publicShow
+        $normalizeImgs = function($raw) {
+            if (!$raw) return null;
+            try {
+                $parsed = json_decode($raw, true);
+                if (is_array($parsed)) {
+                    return array_map([$this, 'normalizeMediaPath'], $parsed);
+                }
+            } catch (\Throwable $e) {}
+            return $this->normalizeMediaPath($raw);
+        };
+
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
@@ -188,7 +204,7 @@ class MedecinController extends Controller
             'role' => $user->role ? $user->role->name : null,
             'specialty' => $profile->specialty ?? $user->role->name,
             'experience' => $profile->experience_years ?? null,
-            'profile_image' => $profile->profile_image ?? null,
+            'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
             'adresse' => $profile->adresse ?? null,
             'location' => $profile->adresse ?? null, // Add location alias
             'disponible' => $profile->disponible ?? null,
@@ -196,16 +212,7 @@ class MedecinController extends Controller
             'horaire_start' => $profile->horaire_start ?? null,
             'horaire_end' => $profile->horaire_end ?? null,
             // Expose gallery images for public profile
-            'imgs' => (function() use ($profile) {
-                $raw = $profile->imgs ?? null;
-                if (!$raw) return null;
-                try {
-                    $parsed = json_decode($raw, true);
-                    return is_array($parsed) ? $parsed : $raw;
-                } catch (\Throwable $e) {
-                    return $raw;
-                }
-            })(),
+            'imgs' => $normalizeImgs($profile->imgs ?? null),
             // CV fields
             'presentation' => $profile->presentation ?? null,
             'carte_professionnelle' => $profile->carte_professionnelle ?? null,
@@ -427,5 +434,39 @@ class MedecinController extends Controller
                 '14:00', '15:00', '16:00', '17:00'
             ]);
         }
+    }
+
+    /**
+     * Normalize a stored media path to a web-accessible '/storage/...' URL path.
+     */
+    private function normalizeMediaPath($path)
+    {
+        if ($path === null || $path === '') {
+            return $path;
+        }
+        $p = str_replace('\\', '/', (string) $path);
+        $p = ltrim($p);
+        // Absolute URL stays as-is
+        if (preg_match('#^https?://#i', $p)) {
+            return $p;
+        }
+        // Strip known prefixes
+        $p = preg_replace('#^/storage/public/#i', '', $p);
+        $p = preg_replace('#^storage/public/#i', '', $p);
+        $p = preg_replace('#^/public/#i', '', $p);
+        $p = preg_replace('#^public/#i', '', $p);
+        $p = preg_replace('#^/storage/#i', '', $p);
+        $p = preg_replace('#^storage/#i', '', $p);
+        $p2 = ltrim($p, '/');
+        // Known public disk directories -> serve under /storage
+        if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Heuristic: image files default to /storage
+        if (preg_match('#\.(png|jpe?g|webp|gif|bmp|svg)$#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Fallback: ensure leading slash
+        return '/' . $p2;
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+// use Illuminate\Support\Facades\Storage; // Not required for simple '/storage' mapping
 use App\Models\User;
 use App\Models\Role;
 use App\Models\CliniqueProfile;
@@ -278,6 +279,17 @@ class OrganizationApiController extends Controller
 
                 foreach ($profiles as $profile) {
                     try {
+                        // Normalize gallery/images
+                        $galleryArr = [];
+                        if (!empty($profile->gallery)) {
+                            $galleryArr = is_string($profile->gallery) ? json_decode($profile->gallery, true) : (is_array($profile->gallery) ? $profile->gallery : []);
+                            $galleryArr = is_array($galleryArr) ? array_map([$this, 'normalizeMediaPath'], $galleryArr) : [];
+                        }
+                        $imgsArr = [];
+                        if (!empty($profile->imgs)) {
+                            $imgsArr = is_string($profile->imgs) ? json_decode($profile->imgs, true) : (is_array($profile->imgs) ? $profile->imgs : []);
+                            $imgsArr = is_array($imgsArr) ? array_map([$this, 'normalizeMediaPath'], $imgsArr) : [];
+                        }
                         $organizations[] = [
                             'id' => $profile->user->id,
                             'name' => $profile->$nameField ?? $profile->user->name,
@@ -295,10 +307,10 @@ class OrganizationApiController extends Controller
                             'presentation' => $profile->presentation ?? '',
                             'informations_pratiques' => $profile->informations_pratiques ?? '',
                             'contact_urgence' => $profile->contact_urgence ?? '',
-                            'etablissement_image' => $profile->etablissement_image ?? '',
-                            'profile_image' => $profile->profile_image ?? '',
-                            'gallery' => $profile->gallery ? (is_string($profile->gallery) ? json_decode($profile->gallery, true) : $profile->gallery) : [],
-                            'imgs' => $profile->imgs ? (is_string($profile->imgs) ? json_decode($profile->imgs, true) : $profile->imgs) : [],
+                            'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? ''),
+                            'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? ''),
+                            'gallery' => $galleryArr,
+                            'imgs' => $imgsArr,
                             'horaires' => [
                                 'start' => $profile->horaire_start ?? '',
                                 'end' => $profile->horaire_end ?? ''
@@ -392,6 +404,9 @@ class OrganizationApiController extends Controller
                 return [];
             };
 
+            $gallery = array_map([$this, 'normalizeMediaPath'], $toArray($profile->gallery));
+            $imgs = array_map([$this, 'normalizeMediaPath'], $toArray($profile->imgs));
+
             $organization = [
                 'id' => $user->id,
                 'name' => $profile->$nameField ?? $user->name,
@@ -411,10 +426,10 @@ class OrganizationApiController extends Controller
                 'clinic_services_description' => $profile->clinic_services_description,
                 'informations_pratiques' => $profile->informations_pratiques,
                 'contact_urgence' => $profile->contact_urgence,
-                'etablissement_image' => $profile->etablissement_image,
-                'profile_image' => $profile->profile_image,
-                'gallery' => $toArray($profile->gallery),
-                'imgs' => $toArray($profile->imgs),
+                'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image),
+                'profile_image' => $this->normalizeMediaPath($profile->profile_image),
+                'gallery' => $gallery,
+                'imgs' => $imgs,
                 'horaires' => [
                     'start' => $profile->horaire_start,
                     'end' => $profile->horaire_end
@@ -749,6 +764,40 @@ class OrganizationApiController extends Controller
     }
 
     /**
+     * Normalize a stored media path to a web-accessible '/storage/...' URL path.
+     */
+    private function normalizeMediaPath($path)
+    {
+        if ($path === null || $path === '') {
+            return $path;
+        }
+        $p = str_replace('\\', '/', (string) $path);
+        $p = ltrim($p);
+        // Absolute URL stays as-is
+        if (preg_match('#^https?://#i', $p)) {
+            return $p;
+        }
+        // Strip known prefixes
+        $p = preg_replace('#^/storage/public/#i', '', $p);
+        $p = preg_replace('#^storage/public/#i', '', $p);
+        $p = preg_replace('#^/public/#i', '', $p);
+        $p = preg_replace('#^public/#i', '', $p);
+        $p = preg_replace('#^/storage/#i', '', $p);
+        $p = preg_replace('#^storage/#i', '', $p);
+        $p2 = ltrim($p, '/');
+        // Known public disk directories -> serve under /storage
+        if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Heuristic: image files default to /storage
+        if (preg_match('#\.(png|jpe?g|webp|gif|bmp|svg)$#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Fallback: ensure leading slash
+        return '/' . $p2;
+    }
+
+    /**
      * Get model class for organization type
      */
     private function getModelClass($type)
@@ -834,7 +883,7 @@ class OrganizationApiController extends Controller
                                 'ville' => $profile->ville ?? '',
                                 'adresse' => $profile->adresse ?? '',
                                 'rating' => $profile->rating ?? 0,
-                                'etablissement_image' => $profile->etablissement_image ?? '',
+                                'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? ''),
                                 'services' => $profile->services ? (is_string($profile->services) ? json_decode($profile->services, true) : $profile->services) : [],
                                 'horaires' => [
                                     'start' => $profile->horaire_start ?? '',

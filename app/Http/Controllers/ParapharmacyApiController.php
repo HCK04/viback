@@ -332,6 +332,8 @@ class ParapharmacyApiController extends Controller
             $searchName = str_replace('-', ' ', $slug);
             $tbl = 'parapharmacie_profiles';
             $has = function ($col) use ($tbl) { return Schema::hasColumn($tbl, $col); };
+            // Safely check existence of optional user columns
+            $hasUser = function ($col) { return Schema::hasColumn('users', $col); };
             $p = DB::table($tbl)
                 ->join('users', "$tbl.user_id", '=', 'users.id')
                 ->where(function ($q) use ($searchName, $tbl) {
