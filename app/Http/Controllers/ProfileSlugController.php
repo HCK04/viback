@@ -17,7 +17,25 @@ class ProfileSlugController extends Controller
     public function showBySlug($slug)
     {
         try {
-            $searchName = str_replace('-', ' ', $slug);
+            // Early fallback: if an explicit numeric ID is provided as a query param,
+            // return the profile by ID using the universal ProfileController.
+            // This allows URLs like /profiles/slug/{slug}?id=149&type=medecin to work
+            // even if the slug doesn't match exactly in production.
+            $idParam = request()->query('id');
+            if ($idParam !== null) {
+                $id = (int)$idParam;
+                if ($id > 0) {
+                    return app(\App\Http\Controllers\ProfileController::class)->show($id);
+                }
+            }
+
+            // Normalize slug variants for robust matching
+            $raw = urldecode((string)$slug);
+            $slugLower = mb_strtolower($raw, 'UTF-8');
+            $searchName = str_replace('-', ' ', $slugLower); // legacy behavior
+            $searchHyphen = str_replace([' ', '_'], '-', $slugLower);
+            $searchSpace = str_replace(['-', '_'], ' ', $slugLower);
+            $searchNoSep = str_replace([' ', '-', '_'], '', $slugLower);
 
             // 1) Try organizations first (pharmacie, parapharmacie, clinique, labo, radiologie)
             $orgs = [
@@ -39,7 +57,20 @@ class ProfileSlugController extends Controller
 
                 $row = DB::table($tbl)
                     ->join('users', "$tbl.user_id", '=', 'users.id')
-                    ->whereRaw("LOWER($tbl.$nameCol) LIKE ?", ['%' . strtolower($searchName) . '%'])
+                    ->where(function ($q) use ($tbl, $nameCol, $searchSpace, $searchHyphen, $searchNoSep) {
+                        // Exact normalized equality first (safest)
+                        $q->whereRaw(
+                            "LOWER(REPLACE(REPLACE(REPLACE($tbl.$nameCol, ' ', ''), '-', ''), '_', '')) = ?",
+                            [$searchNoSep]
+                        )
+                        // Then safe LIKE variants
+                        ->orWhereRaw("LOWER($tbl.$nameCol) LIKE ?", ['%' . $searchSpace . '%'])
+                        ->orWhereRaw("LOWER($tbl.$nameCol) LIKE ?", ['%' . $searchHyphen . '%'])
+                        ->orWhereRaw(
+                            "LOWER(REPLACE(REPLACE(REPLACE($tbl.$nameCol, ' ', ''), '-', ''), '_', '')) LIKE ?",
+                            ['%' . $searchNoSep . '%']
+                        );
+                    })
                     ->select(
                         'users.id', 'users.name', 'users.email', 'users.phone', 'users.is_verified',
                         DB::raw("$tbl.id as profile_id"),
@@ -133,7 +164,18 @@ class ProfileSlugController extends Controller
             // 2) Try individual professionals (match users.name)
             if (Schema::hasTable('users')) {
                 $user = DB::table('users')
-                    ->whereRaw('LOWER(users.name) LIKE ?', ['%' . strtolower($searchName) . '%'])
+                    ->where(function ($q) use ($searchSpace, $searchHyphen, $searchNoSep) {
+                        $q->whereRaw(
+                            "LOWER(REPLACE(REPLACE(REPLACE(users.name, ' ', ''), '-', ''), '_', '')) = ?",
+                            [$searchNoSep]
+                        )
+                        ->orWhereRaw('LOWER(users.name) LIKE ?', ['%' . $searchSpace . '%'])
+                        ->orWhereRaw('LOWER(users.name) LIKE ?', ['%' . $searchHyphen . '%'])
+                        ->orWhereRaw(
+                            "LOWER(REPLACE(REPLACE(REPLACE(users.name, ' ', ''), '-', ''), '_', '')) LIKE ?",
+                            ['%' . $searchNoSep . '%']
+                        );
+                    })
                     ->select('id', 'name', 'email', 'phone', 'is_verified', 'created_at')
                     ->first();
 
