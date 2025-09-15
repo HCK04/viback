@@ -27,6 +27,30 @@ class ProfileSlugController extends Controller
                 if ($id > 0) {
                     return app(\App\Http\Controllers\ProfileController::class)->show($id);
                 }
+            } else {
+                // Fallback: parse numeric id from Referer query (?id=...) for trusted frontend hosts
+                $ref = request()->headers->get('referer');
+                if (is_string($ref) && $ref !== '') {
+                    $host = parse_url($ref, PHP_URL_HOST) ?: '';
+                    $trustedHosts = [
+                        'vi-santé.com',
+                        'www.vi-santé.com',
+                        'xn--vi-sant-hya.com', // punycode variant if ever used
+                        'www.xn--vi-sant-hya.com',
+                    ];
+                    if (in_array(mb_strtolower($host, 'UTF-8'), $trustedHosts, true)) {
+                        $qs = parse_url($ref, PHP_URL_QUERY);
+                        if (is_string($qs) && $qs !== '') {
+                            parse_str($qs, $qArr);
+                            if (isset($qArr['id'])) {
+                                $rid = (int)$qArr['id'];
+                                if ($rid > 0) {
+                                    return app(\App\Http\Controllers\ProfileController::class)->show($rid);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Normalize slug variants for robust matching
