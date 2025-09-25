@@ -150,6 +150,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/appointments', [AppointmentController::class, 'index']);
     });
 
+    // Patient Santé routes (authenticated, patients only)
+    Route::prefix('patient/sante')->group(function () {
+        Route::get('/', [\App\Http\Controllers\PatientSanteController::class, 'index']);
+        Route::post('/section/{section}', [\App\Http\Controllers\PatientSanteController::class, 'updateSection']);
+
+        // Vaccines
+        Route::get('/vaccins/catalog', [\App\Http\Controllers\PatientSanteController::class, 'catalogVaccines']);
+        Route::post('/vaccins/add', [\App\Http\Controllers\PatientSanteController::class, 'addVaccine']);
+        Route::delete('/vaccins/{id}', [\App\Http\Controllers\PatientSanteController::class, 'deleteVaccine']);
+        Route::post('/vaccins/none', [\App\Http\Controllers\PatientSanteController::class, 'toggleVaccinesNone']);
+
+        // Documents
+        Route::post('/documents/upload', [\App\Http\Controllers\PatientSanteController::class, 'uploadDocument']);
+        Route::delete('/documents/{id}', [\App\Http\Controllers\PatientSanteController::class, 'deleteDocument']);
+    });
+
     // Medecins
     Route::get('/medecins', [MedecinController::class, 'index']);
 

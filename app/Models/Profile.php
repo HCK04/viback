@@ -1,6 +1,5 @@
 <?php
  
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,7 +16,7 @@ class Profile extends Model
         'blood_type',
         'allergies',
         'chronic_diseases',
-        'profile_image'
+        'profile_image',
     ];
 
     public function user()

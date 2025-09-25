@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\QueryException;
 
 class ProfileController extends Controller
 {
@@ -14,77 +16,156 @@ class ProfileController extends Controller
     public function show($id)
     {
         Log::info("ProfileController::show called with ID: $id");
-        
-        // Get the user and their role
-        $user = DB::table('users')
-            ->join('roles', 'users.role_id', '=', 'roles.id')
-            ->where('users.id', $id)
-            ->select('users.*', 'roles.name as role_name')
-            ->first();
+        try {
+            // Detect roles table availability; fall back gracefully if missing
+            $hasRolesTable = Schema::hasTable('roles') && Schema::hasColumn('roles', 'id') && Schema::hasColumn('roles', 'name');
+            $hasUsersRoleId = Schema::hasTable('users') && Schema::hasColumn('users', 'role_id');
 
-        if (!$user) {
-            Log::error("User not found for ID: $id");
-            return response()->json(['message' => 'Profile not found'], 404);
-        }
-
-        Log::info("User found: " . json_encode(['id' => $user->id, 'name' => $user->name, 'role' => $user->role_name]));
-
-        // Define profile types
-        $doctorTypes = ['medecin'];
-        $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
-        $professionalTypes = ['kine', 'orthophoniste', 'psychologue'];
-        
-        // Skip admin and patient roles
-        if (in_array($user->role_name, ['admin', 'patient'])) {
-            return response()->json(['message' => 'Profile not accessible'], 403);
-        }
-
-        $profile = null;
-        $profileData = [];
-
-        // Handle doctors
-        if (in_array($user->role_name, $doctorTypes)) {
-            $profile = DB::table('medecin_profiles')->where('user_id', $id)->first();
-            if ($profile) {
-                $profileData = $this->formatDoctorProfile($user, $profile);
-            }
-        }
-        // Handle organizations
-        elseif (in_array($user->role_name, $orgTypes)) {
-            $tableName = $user->role_name . '_profiles';
-            Log::info("Looking for profile in table: $tableName for user_id: $id");
-            $profile = DB::table($tableName)->where('user_id', $id)->first();
-            Log::info("Profile found: " . ($profile ? 'YES' : 'NO'));
-            if ($profile) {
-                Log::info("Profile data: " . json_encode($profile));
-                $profileData = $this->formatOrganizationProfile($user, $profile);
+            $query = DB::table('users');
+            if ($hasRolesTable && $hasUsersRoleId) {
+                $query = $query->leftJoin('roles', 'users.role_id', '=', 'roles.id')
+                    ->select('users.*', 'roles.name as role_name');
             } else {
-                Log::warning("No profile found in $tableName for user_id $id");
+                // No roles table: still select users.* and synthesize role_name later
+                $query = $query->select('users.*', DB::raw('NULL as role_name'));
             }
-        }
-        // Handle other professionals
-        elseif (in_array($user->role_name, $professionalTypes)) {
-            $tableName = $user->role_name . '_profiles';
-            $profile = DB::table($tableName)->where('user_id', $id)->first();
-            if ($profile) {
-                $profileData = $this->formatProfessionalProfile($user, $profile);
-            }
-        }
 
-        // If no profile found, return basic user data
-        if (!$profile) {
-            Log::warning("No profile found for user $id with role {$user->role_name}");
-            // Check if profile table exists and show available profiles
-            if (in_array($user->role_name, $orgTypes)) {
+            $user = $query->where('users.id', $id)->first();
+
+            if (!$user) {
+                Log::error("User not found for ID: $id");
+                return response()->json(['message' => 'Profile not found'], 404);
+            }
+
+            // If role_name is unknown, try to infer by checking existing profile tables for this user_id
+            if (empty($user->role_name)) {
+                $candidateTables = [
+                    'medecin' => 'medecin_profiles',
+                    'kine' => 'kine_profiles',
+                    'orthophoniste' => 'orthophoniste_profiles',
+                    'psychologue' => 'psychologue_profiles',
+                    'clinique' => 'clinique_profiles',
+                    'pharmacie' => 'pharmacie_profiles',
+                    'parapharmacie' => 'parapharmacie_profiles',
+                    'labo_analyse' => 'labo_analyse_profiles',
+                    'centre_radiologie' => 'centre_radiologie_profiles',
+                ];
+                foreach ($candidateTables as $role => $tbl) {
+                    if (Schema::hasTable($tbl)) {
+                        $exists = DB::table($tbl)->where('user_id', $id)->exists();
+                        if ($exists) { $user->role_name = $role; break; }
+                    }
+                }
+            }
+
+            Log::info("User found: " . json_encode(['id' => $user->id, 'name' => $user->name, 'role' => $user->role_name]));
+
+            // Define profile types
+            $doctorTypes = ['medecin'];
+            $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
+            $professionalTypes = ['kine', 'orthophoniste', 'psychologue'];
+
+            // Skip admin and patient roles
+            if (!empty($user->role_name) && in_array($user->role_name, ['admin', 'patient'])) {
+                return response()->json(['message' => 'Profile not accessible'], 403);
+            }
+
+            $profile = null;
+            $profileData = [];
+
+            // Handle doctors
+            if (!empty($user->role_name) && in_array($user->role_name, $doctorTypes)) {
+                if (Schema::hasTable('medecin_profiles')) {
+                    $profile = DB::table('medecin_profiles')->where('user_id', $id)->first();
+                }
+                if ($profile) {
+                    $profileData = $this->formatDoctorProfile($user, $profile);
+                }
+            }
+            // Handle organizations
+            elseif (!empty($user->role_name) && in_array($user->role_name, $orgTypes)) {
                 $tableName = $user->role_name . '_profiles';
-                $allProfiles = DB::table($tableName)->select('user_id')->get();
-                Log::info("Available user_ids in $tableName: " . json_encode($allProfiles->pluck('user_id')));
+                Log::info("Looking for profile in table: $tableName for user_id: $id");
+                if (Schema::hasTable($tableName)) {
+                    $profile = DB::table($tableName)->where('user_id', $id)->first();
+                } else {
+                    Log::warning("Profile table $tableName does not exist");
+                }
+                Log::info("Profile found: " . ($profile ? 'YES' : 'NO'));
+                if ($profile) {
+                    Log::info("Profile data: " . json_encode($profile));
+                    $profileData = $this->formatOrganizationProfile($user, $profile);
+                } else {
+                    Log::warning("No profile found in $tableName for user_id $id");
+                }
             }
-            $profileData = $this->formatBasicProfile($user);
-        }
+            // Handle other professionals
+            elseif (!empty($user->role_name) && in_array($user->role_name, $professionalTypes)) {
+                $tableName = $user->role_name . '_profiles';
+                if (Schema::hasTable($tableName)) {
+                    $profile = DB::table($tableName)->where('user_id', $id)->first();
+                }
+                if ($profile) {
+                    $profileData = $this->formatProfessionalProfile($user, $profile);
+                }
+            }
 
-        Log::info("Returning profile data for user $id");
-        return response()->json($profileData);
+            // If no specific role or no profile found, attempt best-effort detection across known tables
+            if (!$profile) {
+                Log::warning("No profile found for user $id with role " . ($user->role_name ?? 'unknown'));
+                // Try to find any matching row in known profile tables
+                $allTables = [
+                    'medecin_profiles' => 'doctor',
+                    'kine_profiles' => 'kine',
+                    'orthophoniste_profiles' => 'orthophoniste',
+                    'psychologue_profiles' => 'psychologue',
+                    'clinique_profiles' => 'clinique',
+                    'pharmacie_profiles' => 'pharmacie',
+                    'parapharmacie_profiles' => 'parapharmacie',
+                    'labo_analyse_profiles' => 'labo_analyse',
+                    'centre_radiologie_profiles' => 'centre_radiologie',
+                ];
+                foreach ($allTables as $tbl => $kind) {
+                    if (!Schema::hasTable($tbl)) continue;
+                    $row = DB::table($tbl)->where('user_id', $id)->first();
+                    if ($row) {
+                        // Use appropriate formatter if possible
+                        if (in_array($kind, $doctorTypes)) {
+                            $profileData = $this->formatDoctorProfile($user, $row);
+                        } elseif (in_array($kind, $orgTypes)) {
+                            $profileData = $this->formatOrganizationProfile($user, $row);
+                        } else {
+                            $profileData = $this->formatProfessionalProfile($user, $row);
+                        }
+                        $profile = $row;
+                        break;
+                    }
+                }
+            }
+
+            // If still no profile found, return basic user data (prevents 500 and lets frontend display minimal info)
+            if (!$profile) {
+                $profileData = $this->formatBasicProfile($user);
+            }
+
+            Log::info("Returning profile data for user $id");
+            return response()->json($profileData);
+        } catch (QueryException $e) {
+            Log::error('DB error in ProfileController::show', [
+                'id' => $id,
+                'sql' => $e->getSql(),
+                'bindings' => $e->getBindings(),
+                'code' => $e->getCode(),
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['error' => 'Error fetching profile'], 500);
+        } catch (\Exception $e) {
+            Log::error('Error in ProfileController::show', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['error' => 'Error fetching profile'], 500);
+        }
     }
 
     private function formatDoctorProfile($user, $profile)
@@ -100,18 +181,9 @@ class ProfileController extends Controller
                 $decoded = json_decode($s, true);
                 if (is_array($decoded)) return array_values(array_filter($decoded, fn($v) => $v !== null && $v !== ''));
                 // Try unescaped JSON if double-escaped or with newlines
-                $s2 = str_replace(["\r", "\n"], ["\\r", "\\n"], $s);
+                $s2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $s));
                 $decoded2 = json_decode($s2, true);
                 if (is_array($decoded2)) return array_values(array_filter($decoded2, fn($v) => $v !== null && $v !== ''));
-                // Extract quoted segments if format like "[\"A\"\n\"B\"]"
-                if (preg_match_all('/"(?:\\.|[^"\\])*"/u', $s, $m) && !empty($m[0])) {
-                    $items = array_map(function ($q) {
-                        $v = @json_decode($q, true);
-                        return $v !== null ? $v : trim($q, '"');
-                    }, $m[0]);
-                    $items = array_values(array_filter($items, fn($v) => $v !== null && $v !== ''));
-                    if (!empty($items)) return $items;
-                }
                 // Fallback split by newlines/semicolons/commas
                 if (strpos($s, "\n") !== false) {
                     $parts = preg_split('/\n+/', $s);
@@ -311,18 +383,9 @@ class ProfileController extends Controller
                 $decoded = json_decode($s, true);
                 if (is_array($decoded)) return array_values(array_filter($decoded, fn($v) => $v !== null && $v !== ''));
                 // Try unescaped JSON if double-escaped or with newlines
-                $s2 = str_replace(["\r", "\n"], ["\\r", "\\n"], $s);
+                $s2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $s));
                 $decoded2 = json_decode($s2, true);
                 if (is_array($decoded2)) return array_values(array_filter($decoded2, fn($v) => $v !== null && $v !== ''));
-                // Extract quoted segments if format like "[\"A\"\n\"B\"]"
-                if (preg_match_all('/"(?:\\.|[^"\\])*"/u', $s, $m) && !empty($m[0])) {
-                    $items = array_map(function ($q) {
-                        $v = @json_decode($q, true);
-                        return $v !== null ? $v : trim($q, '"');
-                    }, $m[0]);
-                    $items = array_values(array_filter($items, fn($v) => $v !== null && $v !== ''));
-                    if (!empty($items)) return $items;
-                }
                 // Fallback split by newlines/semicolons/commas
                 if (strpos($s, "\n") !== false) {
                     $parts = preg_split('/\n+/', $s);

@@ -369,6 +369,22 @@ class PharmacyApiController extends Controller
     public function showBySlug($slug)
     {
         try {
+            // Helper: slugify a string similar to frontend createSlug
+            $slugify = function($str) {
+                if ($str === null) return null;
+                $s = (string) $str;
+                // Transliterate accents
+                $s = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+                $s = strtolower($s);
+                // Replace punctuation with spaces
+                $s = preg_replace('/[\.|,|;|:|\(|\)|\[|\]|\{|\}|\'"`´’]/u', ' ', $s);
+                $s = preg_replace('/&/u', ' and ', $s);
+                // Replace non-alnum with hyphens
+                $s = preg_replace('/[^a-z0-9]+/u', '-', $s);
+                $s = trim($s, '-');
+                return $s ?: null;
+            };
+
             // Convert slug back to name (replace hyphens with spaces and handle case)
             $searchName = str_replace('-', ' ', $slug);
             
@@ -418,7 +434,59 @@ class PharmacyApiController extends Controller
                 ->first();
 
             if (!$pharmacy) {
-                return response()->json(['message' => 'Pharmacy not found'], 404);
+                // Fallback: scan all pharmacies and compare slugified names
+                $all = \DB::table('pharmacie_profiles')
+                    ->join('users', 'pharmacie_profiles.user_id', '=', 'users.id')
+                    ->select(
+                        'users.id',
+                        'users.name',
+                        'pharmacie_profiles.id as pharmacy_id',
+                        'pharmacie_profiles.nom_pharmacie',
+                        'pharmacie_profiles.adresse',
+                        'pharmacie_profiles.ville',
+                        'pharmacie_profiles.services',
+                        'pharmacie_profiles.description',
+                        'pharmacie_profiles.org_presentation',
+                        'pharmacie_profiles.services_description',
+                        'pharmacie_profiles.responsable_name',
+                        'pharmacie_profiles.horaire_start',
+                        'pharmacie_profiles.horaire_end',
+                        'pharmacie_profiles.rating',
+                        'pharmacie_profiles.guard',
+                        'pharmacie_profiles.moyens_paiement',
+                        'pharmacie_profiles.moyens_transport',
+                        'pharmacie_profiles.informations_pratiques',
+                        'pharmacie_profiles.jours_disponibles',
+                        'pharmacie_profiles.contact_urgence',
+                        'pharmacie_profiles.etablissement_image',
+                        'pharmacie_profiles.profile_image',
+                        'pharmacie_profiles.gallery',
+                        'pharmacie_profiles.disponible',
+                        'pharmacie_profiles.vacation_mode',
+                        'pharmacie_profiles.vacation_auto_reactivate_date',
+                        'pharmacie_profiles.absence_start_date',
+                        'pharmacie_profiles.absence_end_date',
+                        'pharmacie_profiles.additional_info',
+                        'users.email',
+                        'users.phone',
+                        'users.is_verified',
+                        'pharmacie_profiles.created_at',
+                        'pharmacie_profiles.updated_at'
+                    )
+                    ->get();
+
+                $target = null;
+                foreach ($all as $row) {
+                    $slug1 = $slugify($row->nom_pharmacie);
+                    $slug2 = $slugify($row->name);
+                    if ($slug1 === $slug || $slug2 === $slug) { $target = $row; break; }
+                }
+
+                if (!$target) {
+                    return response()->json(['message' => 'Pharmacy not found'], 404);
+                }
+
+                $pharmacy = $target;
             }
             
             $pharmacyData = [

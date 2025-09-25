@@ -114,7 +114,9 @@ class ProfessionalController extends Controller
                     if (is_array($decoded3)) return array_values(array_filter($decoded3, fn($v) => $v !== null && $v !== ''));
                 }
                 // Extract quoted segments if format like "[\"A\"\n\"B\"]"
-                if (preg_match_all('/"(?:\\.|[^"\\])*"/u', $s, $m) && !empty($m[0])) {
+                // IMPORTANT: In a PHP single-quoted string, to represent a literal backslash in the
+                // regex char class, we must use \\\\ so that the resulting pattern is [^"\\]
+                if (preg_match_all('/"(?:\\\\.|[^"\\\\])*"/u', $s, $m) && !empty($m[0])) {
                     $items = array_map(function ($q) {
                         $v = @json_decode($q, true);
                         return $v !== null ? $v : trim($q, '"');
