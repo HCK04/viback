@@ -339,6 +339,8 @@ class ProfileSlugController extends Controller
         }
         $p = str_replace('\\', '/', trim((string) $path));
         $p = ltrim($p);
+        // Strip stray quotes/brackets that may wrap the path
+        $p = trim($p, " \t\n\r\0\x0B\"'[]");
         // Absolute URL stays as-is
         if (preg_match('#^https?://#i', $p)) {
             return $p;
@@ -351,8 +353,14 @@ class ProfileSlugController extends Controller
         $p = preg_replace('#^/storage/#i', '', $p);
         $p = preg_replace('#^storage/#i', '', $p);
         $p2 = ltrim($p, '/');
+
+        // Special-case public cartes_professionnelles (served directly from public/)
+        if (preg_match('#^cartes_professionnelles/#i', $p2)) {
+            $out = '/cartes_professionnelles/' . preg_replace('#^cartes_professionnelles/#i', '', $p2);
+            return preg_replace('#/+#', '/', $out);
+        }
         // Known public disk directories -> serve under /storage
-        if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
+        if (preg_match('#^(imgs|images|uploads|upload|profiles|professional|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
             $out = '/storage/' . ltrim($p2, '/');
             return preg_replace('#/+#', '/', $out);
         }
