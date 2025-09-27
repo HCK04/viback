@@ -292,49 +292,18 @@ class ProfileController extends Controller
             $specialties = $parseArray($profile->specialty);
         }
 
-        // Parse imgs JSON if present (or accept single path string)
-        $sanitizeMedia = function ($p) {
-            if ($p === null) return $p;
-            $s = (string) $p;
-            $s = str_replace(['\\"'], '"', $s);
-            $s = str_replace(['"'], '', $s);
-            $s = str_replace(['[', ']'], '', $s);
-            $s = trim($s);
-            return $this->normalizeMediaPath($s);
-        };
-        $imgs = [];
-        if (isset($profile->imgs) && $profile->imgs) {
-            try {
-                $decoded = json_decode($profile->imgs, true);
-                if (is_array($decoded)) {
-                    $imgs = array_map($sanitizeMedia, $decoded);
-                } elseif (is_string($profile->imgs)) {
-                    $imgs = [ $sanitizeMedia($profile->imgs) ];
-                }
-            } catch (\Exception $e) {
-                if (is_string($profile->imgs)) {
-                    $imgs = [ $sanitizeMedia($profile->imgs) ];
-                } else {
-                    $imgs = [];
-                }
-            }
-        }
+        // Parse imgs: accept JSON array or comma-separated string; always return array of normalized paths
+        $imgs = $this->normalizeMediaList($profile->imgs ?? null);
 
-        // Build gallery fallback (include etablissement_image if no explicit gallery)
-        $gallery = [];
-        if (isset($profile->gallery) && $profile->gallery) {
-            $g = json_decode($profile->gallery, true);
-            if (is_array($g)) {
-                $gallery = array_map($sanitizeMedia, $g);
-            } elseif (is_string($profile->gallery)) {
-                $gallery = [ $sanitizeMedia($profile->gallery) ];
-            }
-        }
+        // Build gallery: accept JSON array or CSV; include establishment/carte images as fallbacks
+        $gallery = $this->normalizeMediaList($profile->gallery ?? null);
         if (empty($gallery) && !empty($profile->etablissement_image)) {
-            $gallery[] = $sanitizeMedia($profile->etablissement_image);
+            $first = $this->normalizeMediaPathFirst($profile->etablissement_image);
+            if ($first) $gallery[] = $first;
         }
         if (!empty($profile->carte_professionnelle)) {
-            $gallery[] = $sanitizeMedia($profile->carte_professionnelle);
+            $cp = $this->normalizeMediaPathFirst($profile->carte_professionnelle);
+            if ($cp) $gallery[] = $cp;
         }
 
         return [
@@ -354,9 +323,9 @@ class ProfileController extends Controller
             'presentation' => $profile->presentation ?? null,
             'additional_info' => $profile->additional_info ?? null,
             'informations_pratiques' => $profile->informations_pratiques ?? null,
-            'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
-            'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? null),
-            'carte_professionnelle' => $this->normalizeMediaPath($profile->carte_professionnelle ?? null),
+            'profile_image' => $this->normalizeMediaPathFirst($profile->profile_image ?? null),
+            'etablissement_image' => $this->normalizeMediaPathFirst($profile->etablissement_image ?? null),
+            'carte_professionnelle' => $this->normalizeMediaPathFirst($profile->carte_professionnelle ?? null),
             'horaire_start' => $profile->horaire_start ?? null,
             'horaire_end' => $profile->horaire_end ?? null,
             'imgs' => $imgs,
@@ -425,26 +394,11 @@ class ProfileController extends Controller
                 break;
         }
 
-        // Extract gallery images with sanitization for stray quotes/brackets
-        $sanitizeMedia = function ($p) {
-            if ($p === null) return $p;
-            $s = (string) $p;
-            $s = str_replace(['\\"'], '"', $s);
-            $s = str_replace(['"'], '', $s);
-            $s = str_replace(['[', ']'], '', $s);
-            $s = trim($s);
-            return $this->normalizeMediaPath($s);
-        };
-        $galleryImages = [];
-        if (isset($profile->gallery) && $profile->gallery) {
-            $gallery = json_decode($profile->gallery, true);
-            if (is_array($gallery)) {
-                $galleryImages = array_map($sanitizeMedia, $gallery);
-            } elseif (is_string($profile->gallery)) {
-                $galleryImages = [ $sanitizeMedia($profile->gallery) ];
-            }
-        } elseif (isset($profile->etablissement_image) && $profile->etablissement_image) {
-            $galleryImages = [$sanitizeMedia($profile->etablissement_image)];
+        // Gallery for organizations: accept JSON array or CSV; include main image if missing
+        $galleryImages = $this->normalizeMediaList($profile->gallery ?? null);
+        if (empty($galleryImages) && !empty($profile->etablissement_image)) {
+            $first = $this->normalizeMediaPathFirst($profile->etablissement_image);
+            if ($first) $galleryImages[] = $first;
         }
 
         // Parse services
@@ -571,8 +525,8 @@ class ProfileController extends Controller
             'informations_pratiques' => $profile->informations_pratiques ?? null,
             'contact_urgence' => $profile->contact_urgence ?? null,
             'gallery' => $galleryImages,
-            'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? null),
-            'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
+            'etablissement_image' => $this->normalizeMediaPathFirst($profile->etablissement_image ?? null),
+            'profile_image' => $this->normalizeMediaPathFirst($profile->profile_image ?? null),
             'horaires' => $horaires,
             'horaire_start' => $horaireStart,
             'horaire_end' => $horaireEnd,
@@ -685,49 +639,18 @@ class ProfileController extends Controller
             $specialties = $parseArray($profile->specialty);
         }
 
-        // Parse imgs JSON if present (or accept single path string) with sanitization
-        $sanitizeMedia = function ($p) {
-            if ($p === null) return $p;
-            $s = (string) $p;
-            $s = str_replace(['\\"'], '"', $s);
-            $s = str_replace(['"'], '', $s);
-            $s = str_replace(['[', ']'], '', $s);
-            $s = trim($s);
-            return $this->normalizeMediaPath($s);
-        };
-        $imgs = [];
-        if (isset($profile->imgs) && $profile->imgs) {
-            try {
-                $decoded = json_decode($profile->imgs, true);
-                if (is_array($decoded)) {
-                    $imgs = array_map($sanitizeMedia, $decoded);
-                } elseif (is_string($profile->imgs)) {
-                    $imgs = [ $sanitizeMedia($profile->imgs) ];
-                }
-            } catch (\Exception $e) {
-                if (is_string($profile->imgs)) {
-                    $imgs = [ $sanitizeMedia($profile->imgs) ];
-                } else {
-                    $imgs = [];
-                }
-            }
-        }
+        // Parse imgs: accept JSON array or comma-separated string; always return array of normalized paths
+        $imgs = $this->normalizeMediaList($profile->imgs ?? null);
 
-        // Build gallery fallback (include etablissement_image and carte_professionnelle if no explicit gallery)
-        $gallery = [];
-        if (isset($profile->gallery) && $profile->gallery) {
-            $g = json_decode($profile->gallery, true);
-            if (is_array($g)) {
-                $gallery = array_map($sanitizeMedia, $g);
-            } elseif (is_string($profile->gallery)) {
-                $gallery = [ $sanitizeMedia($profile->gallery) ];
-            }
-        }
+        // Build gallery: accept JSON array or CSV; include establishment/carte images as fallbacks
+        $gallery = $this->normalizeMediaList($profile->gallery ?? null);
         if (empty($gallery) && !empty($profile->etablissement_image)) {
-            $gallery[] = $sanitizeMedia($profile->etablissement_image);
+            $first = $this->normalizeMediaPathFirst($profile->etablissement_image);
+            if ($first) $gallery[] = $first;
         }
         if (!empty($profile->carte_professionnelle)) {
-            $gallery[] = $sanitizeMedia($profile->carte_professionnelle);
+            $cp = $this->normalizeMediaPathFirst($profile->carte_professionnelle);
+            if ($cp) $gallery[] = $cp;
         }
 
         return [
@@ -895,7 +818,7 @@ class ProfileController extends Controller
         if ($path === null || $path === '') {
             return $path;
         }
-        $p = str_replace('\\', '/', (string) $path);
+        $p = str_replace('\\', '/', trim((string) $path));
         $p = ltrim($p);
         // Absolute URL stays as-is
         if (preg_match('#^https?://#i', $p)) {
@@ -911,13 +834,69 @@ class ProfileController extends Controller
         $p2 = ltrim($p, '/');
         // Known public disk directories -> serve under /storage
         if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
-            return '/storage/' . $p2;
+            $out = '/storage/' . ltrim($p2, '/');
+            return preg_replace('#/+#', '/', $out);
         }
         // Heuristic: image files default to /storage
         if (preg_match('#\.(png|jpe?g|webp|gif|bmp|svg)$#i', $p2)) {
-            return '/storage/' . $p2;
+            $out = '/storage/' . ltrim($p2, '/');
+            return preg_replace('#/+#', '/', $out);
         }
         // Fallback: ensure leading slash
-        return '/' . $p2;
+        $out = '/' . ltrim($p2, '/');
+        return preg_replace('#/+#', '/', $out);
+    }
+
+    /**
+     * Normalize a list of media paths provided as JSON array or comma-separated string.
+     * Always returns an array of normalized URLs.
+     */
+    private function normalizeMediaList($value): array
+    {
+        if ($value === null || $value === '') return [];
+
+        // Already array
+        if (is_array($value)) {
+            $paths = $value;
+        } else if (is_string($value)) {
+            // Try JSON first
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $paths = $decoded;
+            } else {
+                // Split by comma (handles values like "a.jpg, b.jpg")
+                $paths = preg_split('/\s*,\s*/', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            }
+        } else {
+            return [];
+        }
+
+        // Normalize each and filter empties; de-duplicate
+        $out = [];
+        foreach ($paths as $p) {
+            if (!is_string($p)) continue;
+            $n = $this->normalizeMediaPath($p);
+            if ($n !== null && $n !== '' && !in_array($n, $out, true)) {
+                $out[] = $n;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Normalize a single media path, but if a list/CSV is provided, return the first valid entry.
+     */
+    private function normalizeMediaPathFirst($value): ?string
+    {
+        if ($value === null || $value === '') return $value;
+        if (is_array($value)) {
+            $arr = $this->normalizeMediaList($value);
+            return $arr[0] ?? null;
+        }
+        if (is_string($value) && strpos($value, ',') !== false) {
+            $arr = $this->normalizeMediaList($value);
+            return $arr[0] ?? null;
+        }
+        return $this->normalizeMediaPath($value);
     }
 }
