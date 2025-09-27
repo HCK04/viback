@@ -158,19 +158,15 @@ class ProfileSlugController extends Controller
                         'jours_disponibles' => $row->jours_disponibles ? (json_decode($row->jours_disponibles, true) ?: []) : [],
                         'contact_urgence' => $row->contact_urgence,
                         'rating' => (float)$row->rating,
-                        'etablissement_image' => $this->normalizeMediaPath($row->etablissement_image),
-                        'profile_image' => $this->normalizeMediaPath($row->profile_image),
+                        'etablissement_image' => $this->normalizeMediaPathFirst($row->etablissement_image),
+                        'profile_image' => $this->normalizeMediaPathFirst($row->profile_image),
                         'gallery' => (function() use ($row) {
                             if (!$row->gallery) return [];
-                            $g = json_decode($row->gallery, true);
-                            if (is_array($g)) return array_map(function($p){ return $this->normalizeMediaPath($p); }, $g);
-                            if (is_string($row->gallery)) return [$this->normalizeMediaPath($row->gallery)];
-                            return [];
+                            return $this->normalizeMediaList($row->gallery);
                         }).call($this),
                         'imgs' => (function() use ($row) {
                             if (!$row->imgs) return [];
-                            $g = json_decode($row->imgs, true);
-                            return is_array($g) ? array_map(function($p){ return $this->normalizeMediaPath($p); }, $g) : [];
+                            return $this->normalizeMediaList($row->imgs);
                         }).call($this),
                         'disponible' => (bool)$row->disponible,
                         'vacation_mode' => (bool)$row->vacation_mode,
@@ -284,19 +280,15 @@ class ProfileSlugController extends Controller
                                 })(),
                                 'presentation' => $p->presentation,
                                 'additional_info' => $p->additional_info,
-                                'profile_image' => $this->normalizeMediaPath($p->profile_image),
+                                'profile_image' => $this->normalizeMediaPathFirst($p->profile_image),
                                 'rating' => (float)$p->rating,
                                 'imgs' => (function() use ($p) {
                                     if (!$p->imgs) return [];
-                                    $arr = json_decode($p->imgs, true);
-                                    return is_array($arr) ? array_map(function($x){ return $this->normalizeMediaPath($x); }, $arr) : [];
+                                    return $this->normalizeMediaList($p->imgs);
                                 }).call($this),
                                 'gallery' => (function() use ($p) {
                                     if (!$p->gallery) return [];
-                                    $g = json_decode($p->gallery, true);
-                                    if (is_array($g)) return array_map(function($x){ return $this->normalizeMediaPath($x); }, $g);
-                                    if (is_string($p->gallery)) return [$this->normalizeMediaPath($p->gallery)];
-                                    return [];
+                                    return $this->normalizeMediaList($p->gallery);
                                 }).call($this),
                                 'moyens_paiement' => $p->moyens_paiement ? (json_decode($p->moyens_paiement, true) ?: []) : [],
                                 'moyens_transport' => $p->moyens_transport ? (json_decode($p->moyens_transport, true) ?: []) : [],
@@ -345,7 +337,7 @@ class ProfileSlugController extends Controller
         if ($path === null || $path === '') {
             return $path;
         }
-        $p = str_replace('\\', '/', (string) $path);
+        $p = str_replace('\\', '/', trim((string) $path));
         $p = ltrim($p);
         // Absolute URL stays as-is
         if (preg_match('#^https?://#i', $p)) {
@@ -361,13 +353,69 @@ class ProfileSlugController extends Controller
         $p2 = ltrim($p, '/');
         // Known public disk directories -> serve under /storage
         if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
-            return '/storage/' . $p2;
+            $out = '/storage/' . ltrim($p2, '/');
+            return preg_replace('#/+#', '/', $out);
         }
         // Heuristic: image files default to /storage
         if (preg_match('#\.(png|jpe?g|webp|gif|bmp|svg)$#i', $p2)) {
-            return '/storage/' . $p2;
+            $out = '/storage/' . ltrim($p2, '/');
+            return preg_replace('#/+#', '/', $out);
         }
         // Fallback: ensure leading slash
-        return '/' . $p2;
+        $out = '/' . ltrim($p2, '/');
+        return preg_replace('#/+#', '/', $out);
+    }
+
+    /**
+     * Normalize a list of media paths provided as JSON array or comma-separated string.
+     * Always returns an array of normalized URLs.
+     */
+    private function normalizeMediaList($value): array
+    {
+        if ($value === null || $value === '') return [];
+
+        // Already array
+        if (is_array($value)) {
+            $paths = $value;
+        } else if (is_string($value)) {
+            // Try JSON first
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $paths = $decoded;
+            } else {
+                // Split by comma (handles values like "a.jpg, b.jpg")
+                $paths = preg_split('/\s*,\s*/', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            }
+        } else {
+            return [];
+        }
+
+        // Normalize each and filter empties; de-duplicate
+        $out = [];
+        foreach ($paths as $p) {
+            if (!is_string($p)) continue;
+            $n = $this->normalizeMediaPath($p);
+            if ($n !== null && $n !== '' && !in_array($n, $out, true)) {
+                $out[] = $n;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Normalize a single media path, but if a list/CSV is provided, return the first valid entry.
+     */
+    private function normalizeMediaPathFirst($value): ?string
+    {
+        if ($value === null || $value === '') return $value;
+        if (is_array($value)) {
+            $arr = $this->normalizeMediaList($value);
+            return $arr[0] ?? null;
+        }
+        if (is_string($value) && strpos($value, ',') !== false) {
+            $arr = $this->normalizeMediaList($value);
+            return $arr[0] ?? null;
+        }
+        return $this->normalizeMediaPath($value);
     }
 }
