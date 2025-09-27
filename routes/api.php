@@ -22,6 +22,7 @@ use App\Http\Controllers\PharmacyApiController;
 use App\Http\Controllers\PharmacyProfileController;
 use App\Http\Controllers\ParapharmacyApiController;
 use App\Http\Controllers\ProfileSlugController;
+use App\Http\Controllers\MediaAuditController;
 
 /*
 |--------------------------------------------------------------------------
@@ -102,6 +103,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/user/profile', [UserController::class, 'updateProfile']);
     Route::post('/user/profile/update', [UserController::class, 'updateProfile']); // <-- ADD THIS LINE
     Route::post('/user/profile/update-avatar', [UserController::class, 'updateProfileAvatar']);
+    // Allow authenticated users to delete their own account
+    Route::delete('/user', [UserController::class, 'destroySelf']);
 
     // Professional and Organization profile routes
     Route::prefix('professional')->group(function () {
@@ -171,6 +174,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Organizations (authenticated)
     Route::put('/organizations/{id}', [OrganizationApiController::class, 'update']);
+
+    // Secure media audit endpoint (authenticated only)
+    Route::get('/media/audit', [MediaAuditController::class, 'audit'])->middleware('throttle:30,1');
 
     // Appointment booking routes (aliases for rendezvous)
     Route::post('/rendezvous', [AppointmentController::class, 'store']);

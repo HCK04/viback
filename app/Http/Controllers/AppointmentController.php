@@ -8,6 +8,7 @@ use App\Models\MedecinProfile;
 use App\Models\Annonce;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use App\Notifications\AppointmentBooked;
 use App\Notifications\AppointmentUpdated;
 use App\Notifications\AppointmentCancelled;
@@ -27,6 +28,44 @@ class AppointmentController extends Controller
         } while (Rdv::where('id', $id)->exists());
         
         return $id;
+    }
+
+    /**
+     * Resolve the display name for an organization by checking its profile table
+     */
+    private function getOrganizationDisplayName($userId, $role)
+    {
+        try {
+            $role = strtolower((string) $role);
+            $map = [
+                'clinique' => ['table' => 'clinique_profiles', 'field' => 'nom_clinique'],
+                'pharmacie' => ['table' => 'pharmacie_profiles', 'field' => 'nom_pharmacie'],
+                'parapharmacie' => ['table' => 'parapharmacie_profiles', 'field' => 'nom_parapharmacie'],
+                'centre_radiologie' => ['table' => 'centre_radiologie_profiles', 'field' => 'nom_centre'],
+                'labo_analyse' => ['table' => 'labo_analyse_profiles', 'field' => 'nom_labo'],
+            ];
+
+            $candidates = [];
+            if (isset($map[$role])) {
+                $candidates[] = $map[$role];
+            } else {
+                $candidates = array_values($map);
+            }
+
+            foreach ($candidates as $cfg) {
+                $name = DB::table($cfg['table'])->where('user_id', $userId)->value($cfg['field']);
+                if (!empty($name)) {
+                    return $name;
+                }
+            }
+
+            // Fallback to users.name
+            $fallback = DB::table('users')->where('id', $userId)->value('name');
+            return $fallback ?: null;
+        } catch (\Exception $e) {
+            \Log::warning("getOrganizationDisplayName failed for user_id={$userId}, role={$role}: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -53,14 +92,14 @@ class AppointmentController extends Controller
 
             // Normalize for frontend
             $data = $rdvs->map(function ($a) {
-                // Handle organization appointments vs regular appointments
-                $providerName = $a->target?->name ?? 'Établissement';
-                
-                // For organization appointments, use stored patient info
-                if ($a->target_role === 'organization') {
-                    $providerName = $a->target?->name ?? 'Organisation';
-                }
-                
+                $role = strtolower($a->target_role ?? '');
+                // Determine if appointment targets an organization by role
+                $orgRoles = ['clinique','pharmacie','parapharmacie','labo_analyse','centre_radiologie','organization'];
+                $isOrgByRole = in_array($role, $orgRoles, true);
+                // Try to resolve establishment name irrespective of stored role
+                $resolved = $this->getOrganizationDisplayName($a->target_user_id, $role);
+                $providerName = $resolved ?: ($a->target?->name ?? 'Établissement');
+
                 return [
                     'id' => $a->id,
                     'doctor_id' => $a->target_user_id,
@@ -71,7 +110,7 @@ class AppointmentController extends Controller
                     'status' => $a->status,
                     'reason' => $a->reason,
                     'patient_name' => $a->patient_name,
-                    'is_organization_appointment' => $a->target_role === 'organization',
+                    'is_organization_appointment' => ($isOrgByRole || !empty($resolved)),
                 ];
             });
 
@@ -131,10 +170,15 @@ class AppointmentController extends Controller
                 'price' => $price
             ]);
 
+            // Resolve provider display name (prefer establishment name for org roles)
+            $role = strtolower($rdv->target_role ?? '');
+            $resolved = $this->getOrganizationDisplayName($rdv->target_user_id, $role);
+            $providerName = $resolved ?: ($rdv->target ? $rdv->target->name : 'Médecin inconnu');
+
             // Format the appointment data
             $appointment = [
                 'id' => $rdv->id,
-                'doctor_name' => $rdv->target ? $rdv->target->name : 'Médecin inconnu',
+                'doctor_name' => $providerName,
                 'date' => $rdv->date_time ? Carbon::parse($rdv->date_time)->format('Y-m-d') : null,
                 'time' => $rdv->date_time ? Carbon::parse($rdv->date_time)->format('H:i') : null,
                 'date_time' => $rdv->date_time,
@@ -331,6 +375,17 @@ class AppointmentController extends Controller
                 // Continue even if notification fails
             }
 
+            // Compute provider display name for response
+            $roleLower = strtolower($request->target_role);
+            $orgRoles = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie', 'organization'];
+            $returnName = $doctor->name;
+            if (in_array($roleLower, $orgRoles, true)) {
+                $resolved = $this->getOrganizationDisplayName($doctor->id, $roleLower);
+                if (!empty($resolved)) {
+                    $returnName = $resolved;
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Rendez-vous créé avec succès',
@@ -338,7 +393,7 @@ class AppointmentController extends Controller
                 'appointment' => [
                     'id' => $rdv->id,
                     'doctor_id' => $doctor->id,
-                    'doctor_name' => $doctor->name,
+                    'doctor_name' => $returnName,
                     'patient_id' => $user->id,
                     'date' => $dateTime->format('Y-m-d'),
                     'time' => $dateTime->format('H:i'),
@@ -453,13 +508,16 @@ class AppointmentController extends Controller
             ], 500);
         }
 
+        // Resolve and return establishment name
+        $orgName = $this->getOrganizationDisplayName($organization->id, $orgRole ?: 'organization') ?? $organization->name;
+
         return response()->json([
             'success' => true,
             'message' => 'Rendez-vous créé avec succès',
             'appointment' => [
                 'id' => $rdv->id,
                 'organization_id' => $organization->id,
-                'organization_name' => $organization->name,
+                'organization_name' => $orgName,
                 'patient_name' => $rdv->patient_name,
                 'date' => $dateTime->format('Y-m-d'),
                 'time' => $dateTime->format('H:i'),
@@ -539,12 +597,23 @@ class AppointmentController extends Controller
             $doctor->notify(new AppointmentUpdated($rdv, $oldDateTime));
             \Log::info("Update notification sent to doctor {$doctor->id} for appointment {$rdv->id}");
 
+            // Compute provider display name for response (prefer establishment name for organizations)
+            $roleLower = strtolower($rdv->target_role ?? '');
+            $orgRoles = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie', 'organization'];
+            $returnName = $doctor ? $doctor->name : 'Prestataire';
+            if ($doctor && in_array($roleLower, $orgRoles, true)) {
+                $resolved = $this->getOrganizationDisplayName($doctor->id, $roleLower);
+                if (!empty($resolved)) {
+                    $returnName = $resolved;
+                }
+            }
+
             return response()->json([
                 'message' => 'Rendez-vous modifié avec succès',
                 'appointment' => [
                     'id' => $rdv->id,
                     'doctor_id' => $doctor->id,
-                    'doctor_name' => $doctor->name,
+                    'doctor_name' => $returnName,
                     'date' => $dateTime->format('Y-m-d'),
                     'time' => $dateTime->format('H:i'),
                     'status' => $rdv->status,

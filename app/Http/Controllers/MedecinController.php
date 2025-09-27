@@ -57,8 +57,15 @@ class MedecinController extends Controller
                     'presentation' => $profile->presentation ?? null,
                     'additional_info' => $profile->additional_info ?? null,
                     'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
+                    'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? null),
                     // Expose gallery images; keep as array if JSON, otherwise raw string
                     'imgs' => $normalizeImgs($profile->imgs ?? null),
+                    'gallery' => $normalizeImgs($profile->gallery ?? null),
+                    'carte_professionnelle' => $this->normalizeMediaPath($profile->carte_professionnelle ?? null),
+                    // Cleaned practical fields
+                    'moyens_paiement' => $this->parseArrayLoose($profile->moyens_paiement ?? null),
+                    'moyens_transport' => $this->parseArrayLoose($profile->moyens_transport ?? null),
+                    'jours_disponibles' => $this->parseArrayLoose($profile->jours_disponibles ?? null),
                     // CV fields (exposed on public endpoint as requested)
                     'diplomes' => (function() use ($profile) {
                         $raw = $profile->diplomes ?? ($profile->diplomas ?? null);
@@ -72,6 +79,73 @@ class MedecinController extends Controller
         }
 
         return response()->json(['message' => 'Professional not found'], 404);
+    }
+
+    /**
+     * Public index of professionals (medecins, kinés, orthophonistes, psychologues)
+     * Returns minimal fields with normalized media paths. No auth required.
+     */
+    public function publicIndex(Request $request)
+    {
+        $lists = [
+            ['type' => 'medecin', 'model' => MedecinProfile::class],
+            ['type' => 'kine', 'model' => KineProfile::class],
+            ['type' => 'orthophoniste', 'model' => OrthophonisteProfile::class],
+            ['type' => 'psychologue', 'model' => PsychologueProfile::class],
+        ];
+
+        $out = [];
+        foreach ($lists as $cfg) {
+            $rows = $cfg['model']::with('user')->get();
+            foreach ($rows as $row) {
+                if (!$row->user) continue;
+                $imgs = [];
+                // Try to decode imgs/gallery as arrays and normalize
+                foreach (['imgs', 'gallery'] as $col) {
+                    try {
+                        $v = $row->$col ?? null;
+                        if ($v) {
+                            $arr = is_string($v) ? json_decode($v, true) : (is_array($v) ? $v : []);
+                            if (is_array($arr)) {
+                                foreach ($arr as $item) {
+                                    $n = $this->normalizeMediaPath($item);
+                                    if ($n) $imgs[] = $n;
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) { /* ignore */ }
+                }
+                // Add common single-image fields if no gallery
+                $fallbacks = [
+                    $this->normalizeMediaPath($row->profile_image ?? null),
+                    $this->normalizeMediaPath($row->etablissement_image ?? null),
+                    $this->normalizeMediaPath($row->carte_professionnelle ?? null),
+                ];
+                foreach ($fallbacks as $f) { if ($f) $imgs[] = $f; }
+                $imgs = array_values(array_unique(array_filter($imgs)));
+
+                $out[] = [
+                    'id' => $row->user->id,
+                    'name' => $row->user->name,
+                    'type' => $cfg['type'],
+                    'role' => $cfg['type'],
+                    'role_name' => $cfg['type'],
+                    'email' => $row->user->email,
+                    'phone' => $row->user->phone,
+                    'profile_image' => $this->normalizeMediaPath($row->profile_image ?? null),
+                    'etablissement_image' => $this->normalizeMediaPath($row->etablissement_image ?? null),
+                    'imgs' => $imgs,
+                    'rating' => $row->rating ?? 0,
+                    'ville' => $row->ville ?? null,
+                    'adresse' => $row->adresse ?? null,
+                    'disponible' => $row->disponible ?? true,
+                ];
+            }
+        }
+
+        // Sort by name for deterministic order
+        usort($out, fn($a, $b) => strcmp($a['name'], $b['name']));
+        return response()->json($out);
     }
 
     /**
@@ -205,6 +279,7 @@ class MedecinController extends Controller
             'specialty' => $profile->specialty ?? $user->role->name,
             'experience' => $profile->experience_years ?? null,
             'profile_image' => $this->normalizeMediaPath($profile->profile_image ?? null),
+            'etablissement_image' => $this->normalizeMediaPath($profile->etablissement_image ?? null),
             'adresse' => $profile->adresse ?? null,
             'location' => $profile->adresse ?? null, // Add location alias
             'disponible' => $profile->disponible ?? null,
@@ -213,17 +288,18 @@ class MedecinController extends Controller
             'horaire_end' => $profile->horaire_end ?? null,
             // Expose gallery images for public profile
             'imgs' => $normalizeImgs($profile->imgs ?? null),
+            'gallery' => $normalizeImgs($profile->gallery ?? null),
             // CV fields
             'presentation' => $profile->presentation ?? null,
-            'carte_professionnelle' => $profile->carte_professionnelle ?? null,
+            'carte_professionnelle' => $this->normalizeMediaPath($profile->carte_professionnelle ?? null),
             'diplomes' => ($profile->diplomes ?? ($profile->diplomas ?? null)),
             'experiences' => $profile->experiences ?? null,
             'additional_info' => $profile->additional_info ?? null,
-            // New profile fields
-            'moyens_paiement' => $profile->moyens_paiement ?? null,
-            'moyens_transport' => $profile->moyens_transport ?? null,
+            // New profile fields (cleaned arrays)
+            'moyens_paiement' => $this->parseArrayLoose($profile->moyens_paiement ?? null),
+            'moyens_transport' => $this->parseArrayLoose($profile->moyens_transport ?? null),
             'informations_pratiques' => $profile->informations_pratiques ?? null,
-            'jours_disponibles' => $profile->jours_disponibles ?? null,
+            'jours_disponibles' => $this->parseArrayLoose($profile->jours_disponibles ?? null),
             'contact_urgence' => $profile->contact_urgence ?? null,
             'rdv_patients_suivis_uniquement' => $profile->rdv_patients_suivis_uniquement ?? false,
         ]);
@@ -468,5 +544,73 @@ class MedecinController extends Controller
         }
         // Fallback: ensure leading slash
         return '/' . $p2;
+    }
+
+    /**
+     * Tolerant parser to clean arrays possibly stored as JSON strings, double-encoded JSON,
+     * or malformed strings split by backslashes/newlines. Returns a deduped array of clean strings.
+     */
+    private function parseArrayLoose($value)
+    {
+        $cleanOne = function ($s) {
+            $s = (string) $s;
+            $s = trim($s);
+            if (strlen($s) >= 2 && $s[0] === '"' && substr($s, -1) === '"') {
+                $s = substr($s, 1, -1);
+            }
+            $s = str_replace(["\\r", "\\n"], ' ', $s);
+            $s = str_replace(['\\"'], '"', $s);
+            $s = str_replace(['\\\\'], '\\', $s);
+            $s = rtrim($s, '\\');
+            return trim($s, " \t\n\r\0\x0B\"[]");
+        };
+        $flatten = function (array $list) use ($cleanOne) {
+            $out = [];
+            foreach ($list as $it) {
+                $parts = preg_split('/\\\\\s*/', $it);
+                foreach ($parts as $p) {
+                    $p = $cleanOne($p);
+                    if ($p !== '') $out[] = $p;
+                }
+            }
+            return array_values(array_unique($out));
+        };
+        if ($value === null) return [];
+        if (is_array($value)) {
+            $arr = [];
+            foreach ($value as $v) if (is_string($v)) $arr[] = $cleanOne($v);
+            return $flatten(array_values(array_filter($arr, fn($v) => $v !== '')));
+        }
+        if (is_string($value)) {
+            $s = trim($value);
+            if ($s === '') return [];
+            $decoded = json_decode($s, true);
+            if (is_array($decoded)) return $flatten(array_map($cleanOne, $decoded));
+            if (is_string($decoded)) {
+                $d2 = json_decode($decoded, true);
+                if (is_array($d2)) return $flatten(array_map($cleanOne, $d2));
+            }
+            $s2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $s));
+            $decoded2 = json_decode($s2, true);
+            if (is_array($decoded2)) return $flatten(array_map($cleanOne, $decoded2));
+            if (is_string($decoded2)) {
+                $d3 = json_decode($decoded2, true);
+                if (is_array($d3)) return $flatten(array_map($cleanOne, $d3));
+            }
+            if (preg_match_all('/"(?:\\\\.|[^"\\])*"/', $s, $m) && !empty($m[0])) {
+                $items = [];
+                foreach ($m[0] as $q) {
+                    $qv = json_decode($q, true);
+                    $items[] = is_string($qv) ? $cleanOne($qv) : $cleanOne($q);
+                }
+                $items = $flatten(array_values(array_filter($items, fn($v) => $v !== '')));
+                if (!empty($items)) return $items;
+            }
+            $parts = null;
+            if (strpos($s, "\n") !== false) $parts = preg_split('/\n+/', $s); else if (strpos($s, ';') !== false) $parts = explode(';', $s); else if (strpos($s, ',') !== false) $parts = explode(',', $s); else $parts = [$s];
+            $parts = array_map($cleanOne, $parts);
+            return $flatten(array_values(array_filter($parts, fn($v) => $v !== '')));
+        }
+        return [];
     }
 }

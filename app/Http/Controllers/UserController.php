@@ -783,6 +783,62 @@ class UserController extends Controller
     }
 
     /**
+     * Allow authenticated user to delete their own account
+     */
+    public function destroySelf(Request $request)
+    {
+        try {
+            $user = auth()->user();
+            if (!$user) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            // Prevent deletion if user has related RDVs or annonces to avoid breaking references
+            $hasRelationships = false;
+            try {
+                if (method_exists($user, 'rdvs') && $user->rdvs()->count() > 0) {
+                    $hasRelationships = true;
+                }
+            } catch (\Throwable $t) { /* ignore */ }
+            try {
+                if (method_exists($user, 'annonces') && $user->annonces()->count() > 0) {
+                    $hasRelationships = true;
+                }
+            } catch (\Throwable $t) { /* ignore */ }
+
+            if ($hasRelationships) {
+                return response()->json([
+                    'message' => "Suppression impossible: vous avez des rendez-vous ou des annonces associés. Veuillez d'abord les annuler/supprimer."
+                ], 400);
+            }
+
+            // Best-effort cleanup of profile rows (to avoid orphans)
+            try { if (method_exists($user, 'patientProfile') && $user->patientProfile) { $user->patientProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'profile') && $user->profile) { $user->profile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'medecinProfile') && $user->medecinProfile) { $user->medecinProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'kineProfile') && $user->kineProfile) { $user->kineProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'orthophonisteProfile') && $user->orthophonisteProfile) { $user->orthophonisteProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'psychologueProfile') && $user->psychologueProfile) { $user->psychologueProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'cliniqueProfile') && $user->cliniqueProfile) { $user->cliniqueProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'pharmacieProfile') && $user->pharmacieProfile) { $user->pharmacieProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'parapharmacieProfile') && $user->parapharmacieProfile) { $user->parapharmacieProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'laboAnalyseProfile') && $user->laboAnalyseProfile) { $user->laboAnalyseProfile->delete(); } } catch (\Throwable $t) {}
+            try { if (method_exists($user, 'centreRadiologieProfile') && $user->centreRadiologieProfile) { $user->centreRadiologieProfile->delete(); } } catch (\Throwable $t) {}
+
+            // Finally, delete the user
+            $user->delete();
+
+            // Revoke tokens if any
+            try { $request->user()->currentAccessToken()->delete(); } catch (\Throwable $t) { /* ignore */ }
+
+            return response()->json(['message' => 'Compte supprimé avec succès']);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting own account: ' . $e->getMessage(), [ 'user_id' => auth()->id() ]);
+            return response()->json(['error' => 'Échec de la suppression du compte'], 500);
+        }
+    }
+
+    /**
      * Get public user profile by ID
      */
     public function publicShow($id)

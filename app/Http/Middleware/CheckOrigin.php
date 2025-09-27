@@ -8,25 +8,34 @@ class CheckOrigin
 {
     public function handle(Request $request, Closure $next)
     {
-        $allowed = [
-            'http://localhost:3000',
-    'http://localhost:8000',
-    'https://vi-santé.com',
-    'https://api.vi-santé.com',
-    'https://xn--vi-sant-hya.com',
-    'https://api.xn--vi-sant-hya.com',
-    // Add these for direct API route access if needed:
-    'https://vi-santé.com/api/medecins',
-    'https://vi-santé.com/api/appointments',
-    'https://vi-santé.com/api/organisations',
-    'https://api.vi-sant-hya.com/api/medecins',
-    'https://api.vi-sant-hya.com/api/appointments',
-    'https://api.vi-sant-hya.com/api/organisations',
-        ];
+        $allowedOrigins = config('cors.allowed_origins', []);
+        $allowedHosts = [];
+        foreach ($allowedOrigins as $o) {
+            $host = parse_url($o, PHP_URL_HOST);
+            if ($host) $allowedHosts[] = $host;
+        }
+        $allowedHosts = array_values(array_unique($allowedHosts));
+
+        $isProduction = app()->environment('production') || (config('app.debug') === false);
 
         $origin = $request->headers->get('Origin');
-        if ($origin && !in_array($origin, $allowed)) {
-            return response()->json(['error' => 'Unauthorized origin'], 403);
+        if ($origin) {
+            $host = parse_url($origin, PHP_URL_HOST);
+            if ($isProduction && $host && !in_array($host, $allowedHosts, true)) {
+                return response()->json(['error' => 'Unauthorized origin'], 403);
+            }
+        } else if ($isProduction) {
+            // Fall back to Referer in production when Origin is missing
+            $referer = $request->headers->get('Referer');
+            if ($referer) {
+                $refHost = parse_url($referer, PHP_URL_HOST);
+                if ($refHost && !in_array($refHost, $allowedHosts, true)) {
+                    return response()->json(['error' => 'Unauthorized origin'], 403);
+                }
+            } else {
+                // No Origin and no Referer in production: block
+                return response()->json(['error' => 'Unauthorized origin'], 403);
+            }
         }
 
         return $next($request);

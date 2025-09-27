@@ -158,10 +158,20 @@ class ProfileSlugController extends Controller
                         'jours_disponibles' => $row->jours_disponibles ? (json_decode($row->jours_disponibles, true) ?: []) : [],
                         'contact_urgence' => $row->contact_urgence,
                         'rating' => (float)$row->rating,
-                        'etablissement_image' => $row->etablissement_image,
-                        'profile_image' => $row->profile_image,
-                        'gallery' => $row->gallery ? (json_decode($row->gallery, true) ?: []) : [],
-                        'imgs' => $row->imgs ? (json_decode($row->imgs, true) ?: []) : [],
+                        'etablissement_image' => $this->normalizeMediaPath($row->etablissement_image),
+                        'profile_image' => $this->normalizeMediaPath($row->profile_image),
+                        'gallery' => (function() use ($row) {
+                            if (!$row->gallery) return [];
+                            $g = json_decode($row->gallery, true);
+                            if (is_array($g)) return array_map(function($p){ return $this->normalizeMediaPath($p); }, $g);
+                            if (is_string($row->gallery)) return [$this->normalizeMediaPath($row->gallery)];
+                            return [];
+                        }).call($this),
+                        'imgs' => (function() use ($row) {
+                            if (!$row->imgs) return [];
+                            $g = json_decode($row->imgs, true);
+                            return is_array($g) ? array_map(function($p){ return $this->normalizeMediaPath($p); }, $g) : [];
+                        }).call($this),
                         'disponible' => (bool)$row->disponible,
                         'vacation_mode' => (bool)$row->vacation_mode,
                         'vacation_auto_reactivate_date' => $row->vacation_auto_reactivate_date,
@@ -274,10 +284,20 @@ class ProfileSlugController extends Controller
                                 })(),
                                 'presentation' => $p->presentation,
                                 'additional_info' => $p->additional_info,
-                                'profile_image' => $p->profile_image,
+                                'profile_image' => $this->normalizeMediaPath($p->profile_image),
                                 'rating' => (float)$p->rating,
-                                'imgs' => $p->imgs ? (json_decode($p->imgs, true) ?: []) : [],
-                                'gallery' => $p->gallery ? (json_decode($p->gallery, true) ?: []) : [],
+                                'imgs' => (function() use ($p) {
+                                    if (!$p->imgs) return [];
+                                    $arr = json_decode($p->imgs, true);
+                                    return is_array($arr) ? array_map(function($x){ return $this->normalizeMediaPath($x); }, $arr) : [];
+                                }).call($this),
+                                'gallery' => (function() use ($p) {
+                                    if (!$p->gallery) return [];
+                                    $g = json_decode($p->gallery, true);
+                                    if (is_array($g)) return array_map(function($x){ return $this->normalizeMediaPath($x); }, $g);
+                                    if (is_string($p->gallery)) return [$this->normalizeMediaPath($p->gallery)];
+                                    return [];
+                                }).call($this),
                                 'moyens_paiement' => $p->moyens_paiement ? (json_decode($p->moyens_paiement, true) ?: []) : [],
                                 'moyens_transport' => $p->moyens_transport ? (json_decode($p->moyens_transport, true) ?: []) : [],
                                 'informations_pratiques' => $p->informations_pratiques,
@@ -315,5 +335,39 @@ class ProfileSlugController extends Controller
             ]);
             return response()->json(['error' => 'Error fetching profile by slug'], 500);
         }
+    }
+
+    /**
+     * Normalize a stored media path to a web-accessible '/storage/...' URL path.
+     */
+    private function normalizeMediaPath($path)
+    {
+        if ($path === null || $path === '') {
+            return $path;
+        }
+        $p = str_replace('\\', '/', (string) $path);
+        $p = ltrim($p);
+        // Absolute URL stays as-is
+        if (preg_match('#^https?://#i', $p)) {
+            return $p;
+        }
+        // Strip known prefixes
+        $p = preg_replace('#^/storage/public/#i', '', $p);
+        $p = preg_replace('#^storage/public/#i', '', $p);
+        $p = preg_replace('#^/public/#i', '', $p);
+        $p = preg_replace('#^public/#i', '', $p);
+        $p = preg_replace('#^/storage/#i', '', $p);
+        $p = preg_replace('#^storage/#i', '', $p);
+        $p2 = ltrim($p, '/');
+        // Known public disk directories -> serve under /storage
+        if (preg_match('#^(imgs|images|uploads|upload|profiles|etablissements|clinic|clinique|clinics|parapharmacie|parapharmacies|parapharmacie_profiles|pharmacie|pharmacies|pharmacy|pharmacie_profiles|labo|labo_analyse|laboratoire|radiologie|centre_radiologie|etablissement_images|gallery)/#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Heuristic: image files default to /storage
+        if (preg_match('#\.(png|jpe?g|webp|gif|bmp|svg)$#i', $p2)) {
+            return '/storage/' . $p2;
+        }
+        // Fallback: ensure leading slash
+        return '/' . $p2;
     }
 }

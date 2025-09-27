@@ -90,54 +90,69 @@ class ProfessionalController extends Controller
         Log::info("=== FORMATTING PROFESSIONAL PROFILE FOR USER {$user->id} ===");
         Log::info("Raw profile data: " . json_encode($profile));
         
-        // Robust array parser (handles JSON strings/arrays/CSV/escaped JSON/newlines/double-encoded JSON)
+        // Robust array parser with cleaning, unicode decoding, and backslash splitting
         $parseArray = function ($value) {
+            $cleanOne = function ($s) {
+                $s = (string) $s;
+                $s = trim($s);
+                if (strlen($s) >= 2 && $s[0] === '"' && substr($s, -1) === '"') {
+                    $s = substr($s, 1, -1);
+                }
+                $s = str_replace(["\\r", "\\n"], ' ', $s);
+                $s = str_replace(['\\"'], '"', $s);
+                $s = str_replace(['\\\\'], '\\', $s);
+                $s = rtrim($s, '\\');
+                if (preg_match('/\\\u[0-9a-fA-F]{4}/', $s)) {
+                    $s = preg_replace_callback('/\\\u([0-9a-fA-F]{4})/', function ($m) { $code = hexdec($m[1]); return mb_convert_encoding(pack('n', $code), 'UTF-8', 'UTF-16BE'); }, $s);
+                }
+                return trim($s, " \t\n\r\0\x0B\"[]");
+            };
+            $flatten = function (array $list) use ($cleanOne) {
+                $out = [];
+                foreach ($list as $it) {
+                    $parts = preg_split('/\\\\\s*/', $it);
+                    foreach ($parts as $p) {
+                        $p = $cleanOne($p);
+                        if ($p !== '') $out[] = $p;
+                    }
+                }
+                return array_values(array_unique($out));
+            };
             if ($value === null) return [];
-            if (is_array($value)) return array_values(array_filter($value, fn($v) => $v !== null && $v !== ''));
+            if (is_array($value)) {
+                $arr = [];
+                foreach ($value as $v) if (is_string($v)) $arr[] = $cleanOne($v);
+                return $flatten(array_values(array_filter($arr, fn($v) => $v !== '')));
+            }
             if (is_string($value)) {
                 $s = trim($value);
                 if ($s === '') return [];
-                // Try JSON
                 $decoded = json_decode($s, true);
-                if (is_array($decoded)) return array_values(array_filter($decoded, fn($v) => $v !== null && $v !== ''));
-                // If decoded is a string like "[\"A\",\"B\"]", decode again
-                if (is_string($decoded) && strlen($decoded) > 2 && $decoded[0] === '[' && substr($decoded, -1) === ']') {
-                    $decodedAgain = json_decode($decoded, true);
-                    if (is_array($decodedAgain)) return array_values(array_filter($decodedAgain, fn($v) => $v !== null && $v !== ''));
+                if (is_array($decoded)) return $flatten(array_map($cleanOne, $decoded));
+                if (is_string($decoded)) {
+                    $d2 = json_decode($decoded, true);
+                    if (is_array($d2)) return $flatten(array_map($cleanOne, $d2));
                 }
-                // Try unescaped JSON if double-escaped or with newlines
-                $s2 = str_replace(["\r", "\n"], ["\\r", "\\n"], stripcslashes($s));
+                $s2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $s));
                 $decoded2 = json_decode($s2, true);
-                if (is_array($decoded2)) return array_values(array_filter($decoded2, fn($v) => $v !== null && $v !== ''));
-                if (is_string($decoded2) && strlen($decoded2) > 2 && $decoded2[0] === '[' && substr($decoded2, -1) === ']') {
-                    $decoded3 = json_decode($decoded2, true);
-                    if (is_array($decoded3)) return array_values(array_filter($decoded3, fn($v) => $v !== null && $v !== ''));
+                if (is_array($decoded2)) return $flatten(array_map($cleanOne, $decoded2));
+                if (is_string($decoded2)) {
+                    $d3 = json_decode($decoded2, true);
+                    if (is_array($d3)) return $flatten(array_map($cleanOne, $d3));
                 }
-                // Extract quoted segments if format like "[\"A\"\n\"B\"]"
-                // IMPORTANT: In a PHP single-quoted string, to represent a literal backslash in the
-                // regex char class, we must use \\\\ so that the resulting pattern is [^"\\]
                 if (preg_match_all('/"(?:\\\\.|[^"\\\\])*"/u', $s, $m) && !empty($m[0])) {
-                    $items = array_map(function ($q) {
+                    $items = [];
+                    foreach ($m[0] as $q) {
                         $v = @json_decode($q, true);
-                        return $v !== null ? $v : trim($q, '"');
-                    }, $m[0]);
-                    $items = array_values(array_filter($items, fn($v) => $v !== null && $v !== ''));
+                        $items[] = $v !== null ? $cleanOne($v) : $cleanOne(trim($q, '"'));
+                    }
+                    $items = $flatten(array_values(array_filter($items, fn($v) => $v !== '')));
                     if (!empty($items)) return $items;
                 }
-                // Fallback split by newlines/semicolons/commas
-                if (strpos($s, "\n") !== false) {
-                    $parts = preg_split('/\n+/', $s);
-                    return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
-                }
-                if (strpos($s, ';') !== false) {
-                    $parts = explode(';', $s);
-                    return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
-                }
-                if (strpos($s, ',') !== false) {
-                    $parts = explode(',', $s);
-                    return array_values(array_filter(array_map('trim', $parts), fn($v) => $v !== ''));
-                }
-                return [$s];
+                $parts = null;
+                if (strpos($s, "\n") !== false) $parts = preg_split('/\n+/', $s); else if (strpos($s, ';') !== false) $parts = explode(';', $s); else if (strpos($s, ',') !== false) $parts = explode(',', $s); else $parts = [$s];
+                $parts = array_map($cleanOne, $parts);
+                return $flatten(array_values(array_filter($parts, fn($v) => $v !== '')));
             }
             return [];
         };
@@ -148,18 +163,35 @@ class ProfessionalController extends Controller
             $specialties = $parseArray($profile->specialty);
         }
 
-        $diplomes = [];
-        if (isset($profile->diplomes) && $profile->diplomes !== null && $profile->diplomes !== '') {
-            $diplomes = $parseArray($profile->diplomes);
-        } elseif (isset($profile->diplomas) && $profile->diplomas !== null && $profile->diplomas !== '') {
-            // Fallback for legacy column name
-            $diplomes = $parseArray($profile->diplomas);
-        }
+        // Preserve JSON object structure for CV fields (no flattening)
+        $diplomes = (function() use ($profile) {
+            $raw = $profile->diplomes ?? $profile->diplomas ?? null;
+            if ($raw === null || $raw === '') return [];
+            if (is_array($raw)) return $raw;
+            if (is_string($raw)) {
+                $d = json_decode($raw, true);
+                if (is_array($d)) return $d;
+                // Try unescaped JSON (handles double-encoding and raw newlines)
+                $raw2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $raw));
+                $d2 = json_decode($raw2, true);
+                if (is_array($d2)) return $d2;
+            }
+            return [];
+        })();
 
-        $experiences = [];
-        if (isset($profile->experiences)) {
-            $experiences = $parseArray($profile->experiences);
-        }
+        $experiences = (function() use ($profile) {
+            $raw = $profile->experiences ?? null;
+            if ($raw === null || $raw === '') return [];
+            if (is_array($raw)) return $raw;
+            if (is_string($raw)) {
+                $d = json_decode($raw, true);
+                if (is_array($d)) return $d;
+                $raw2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $raw));
+                $d2 = json_decode($raw2, true);
+                if (is_array($d2)) return $d2;
+            }
+            return [];
+        })();
 
         $moyensPaiement = [];
         if (isset($profile->moyens_paiement)) {
@@ -305,23 +337,50 @@ class ProfessionalController extends Controller
             }
         }
 
-        $moyensPaiement = [];
-        if (isset($profile->moyens_paiement) && $profile->moyens_paiement) {
-            $decoded = json_decode($profile->moyens_paiement, true);
-            $moyensPaiement = is_array($decoded) ? $decoded : [];
-        }
+        // Cleaner for organization arrays
+        $parseArrayClean = function ($value) {
+            $cleanOne = function ($s) {
+                $s = (string) $s; $s = trim($s);
+                if (strlen($s) >= 2 && $s[0] === '"' && substr($s, -1) === '"') { $s = substr($s, 1, -1); }
+                $s = str_replace(["\\r", "\\n"], ' ', $s);
+                $s = str_replace(['\\"'], '"', $s);
+                $s = str_replace(['\\\\'], '\\', $s);
+                $s = rtrim($s, '\\');
+                if (preg_match('/\\\u[0-9a-fA-F]{4}/', $s)) {
+                    $s = preg_replace_callback('/\\\u([0-9a-fA-F]{4})/', function ($m) { $code = hexdec($m[1]); return mb_convert_encoding(pack('n', $code), 'UTF-8', 'UTF-16BE'); }, $s);
+                }
+                return trim($s, " \t\n\r\0\x0B\"[]");
+            };
+            $flatten = function (array $list) use ($cleanOne) {
+                $out = [];
+                foreach ($list as $it) {
+                    $parts = preg_split('/\\\\\s*/', $it);
+                    foreach ($parts as $p) { $p = $cleanOne($p); if ($p !== '') $out[] = $p; }
+                }
+                return array_values(array_unique($out));
+            };
+            if ($value === null || $value === '') return [];
+            if (is_array($value)) return $flatten(array_values(array_filter(array_map($cleanOne, $value), fn($v) => $v !== '')));
+            if (is_string($value)) {
+                $s = trim($value);
+                $d = json_decode($s, true); if (is_array($d)) return $flatten(array_map($cleanOne, $d));
+                if (is_string($d)) { $d2 = json_decode($d, true); if (is_array($d2)) return $flatten(array_map($cleanOne, $d2)); }
+                $s2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $s));
+                $d3 = json_decode($s2, true); if (is_array($d3)) return $flatten(array_map($cleanOne, $d3));
+                if (is_string($d3)) { $d4 = json_decode($d3, true); if (is_array($d4)) return $flatten(array_map($cleanOne, $d4)); }
+                if (preg_match_all('/"(?:\\\\.|[^"\\\\])*"/u', $s, $m) && !empty($m[0])) {
+                    $items = []; foreach ($m[0] as $q) { $v = @json_decode($q, true); $items[] = $v !== null ? $cleanOne($v) : $cleanOne(trim($q, '"')); }
+                    $items = $flatten(array_values(array_filter($items, fn($v) => $v !== ''))); if (!empty($items)) return $items;
+                }
+                $parts = null; if (strpos($s, "\n") !== false) $parts = preg_split('/\n+/', $s); else if (strpos($s, ';') !== false) $parts = explode(';', $s); else if (strpos($s, ',') !== false) $parts = explode(',', $s); else $parts = [$s];
+                return $flatten(array_values(array_filter(array_map($cleanOne, $parts), fn($v) => $v !== '')));
+            }
+            return [];
+        };
 
-        $moyensTransport = [];
-        if (isset($profile->moyens_transport) && $profile->moyens_transport) {
-            $decoded = json_decode($profile->moyens_transport, true);
-            $moyensTransport = is_array($decoded) ? $decoded : [];
-        }
-
-        $joursDisponibles = [];
-        if (isset($profile->jours_disponibles) && $profile->jours_disponibles) {
-            $decoded = json_decode($profile->jours_disponibles, true);
-            $joursDisponibles = is_array($decoded) ? $decoded : [];
-        }
+        $moyensPaiement = $parseArrayClean($profile->moyens_paiement ?? null);
+        $moyensTransport = $parseArrayClean($profile->moyens_transport ?? null);
+        $joursDisponibles = $parseArrayClean($profile->jours_disponibles ?? null);
 
         // Parse imgs JSON if present
         $imgs = [];
