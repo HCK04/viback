@@ -163,35 +163,18 @@ class ProfessionalController extends Controller
             $specialties = $parseArray($profile->specialty);
         }
 
-        // Preserve JSON object structure for CV fields (no flattening)
-        $diplomes = (function() use ($profile) {
-            $raw = $profile->diplomes ?? $profile->diplomas ?? null;
-            if ($raw === null || $raw === '') return [];
-            if (is_array($raw)) return $raw;
-            if (is_string($raw)) {
-                $d = json_decode($raw, true);
-                if (is_array($d)) return $d;
-                // Try unescaped JSON (handles double-encoding and raw newlines)
-                $raw2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $raw));
-                $d2 = json_decode($raw2, true);
-                if (is_array($d2)) return $d2;
-            }
-            return [];
-        })();
+        $diplomes = [];
+        if (isset($profile->diplomes) && $profile->diplomes !== null && $profile->diplomes !== '') {
+            $diplomes = $parseArray($profile->diplomes);
+        } elseif (isset($profile->diplomas) && $profile->diplomas !== null && $profile->diplomas !== '') {
+            // Fallback for legacy column name
+            $diplomes = $parseArray($profile->diplomas);
+        }
 
-        $experiences = (function() use ($profile) {
-            $raw = $profile->experiences ?? null;
-            if ($raw === null || $raw === '') return [];
-            if (is_array($raw)) return $raw;
-            if (is_string($raw)) {
-                $d = json_decode($raw, true);
-                if (is_array($d)) return $d;
-                $raw2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $raw));
-                $d2 = json_decode($raw2, true);
-                if (is_array($d2)) return $d2;
-            }
-            return [];
-        })();
+        $experiences = [];
+        if (isset($profile->experiences)) {
+            $experiences = $parseArray($profile->experiences);
+        }
 
         $moyensPaiement = [];
         if (isset($profile->moyens_paiement)) {
