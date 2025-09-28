@@ -572,17 +572,23 @@ class ProfessionalProfileController extends Controller
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
                 $filename = time() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('professional', $filename, 'public');
+                // Determine role name to route to correct folder
+                $roleEntity = null;
+                try { $roleEntity = $user->role; } catch (\Throwable $e) { $roleEntity = null; }
+                $roleName = strtolower(($roleEntity->name ?? ($user->role_name ?? '')));
+                $isOrgRole = in_array($roleName, ['clinique','pharmacie','parapharmacie','labo_analyse','centre_radiologie','pharmacy']);
+                $subdir = $isOrgRole ? 'etablissements' : 'imgs';
+                $path = $file->storeAs($subdir, $filename, 'public');
 
                 $professionalProfile = $getProfile();
                 if ($professionalProfile) {
-                    $imageField = in_array($user->role_id, [7, 8, 10]) ? 'etablissement_image' : 'profile_image';
+                    $imageField = $isOrgRole ? 'etablissement_image' : 'profile_image';
                     if ($professionalProfile->$imageField && Storage::disk('public')->exists(str_replace('/storage/', '', $professionalProfile->$imageField))) {
                         Storage::disk('public')->delete(str_replace('/storage/', '', $professionalProfile->$imageField));
                     }
-                    $professionalProfile->$imageField = '/storage/' . $path;
+                    $professionalProfile->$imageField = '/storage/' . ltrim($path, '/');
                     $professionalProfile->save();
-                    $response['path'] = '/storage/' . $path;
+                    $response['path'] = '/storage/' . ltrim($path, '/');
                 }
             }
 
@@ -600,8 +606,8 @@ class ProfessionalProfileController extends Controller
                 $newPaths = [];
                 foreach ($files as $file) {
                     $filename = time() . '_' . $file->getClientOriginalName();
-                    $stored = $file->storeAs('public/imgs', $filename);
-                    $newPaths[] = '/storage/' . str_replace('public/', '', $stored);
+                    $stored = $file->storeAs('imgs', $filename, 'public');
+                    $newPaths[] = '/storage/' . ltrim($stored, '/');
                 }
                 $finalPaths = array_slice(array_merge($finalPaths ?: [], $newPaths), 0, 6);
             }

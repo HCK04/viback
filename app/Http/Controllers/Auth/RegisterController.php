@@ -93,7 +93,7 @@ class RegisterController extends Controller
                 $userData['presentation'] = $request->presentation;
             }
             if (Schema::hasColumn('users', 'carte_professionnelle') && $request->hasFile('carte_professionnelle')) {
-                $userData['carte_professionnelle'] = $request->file('carte_professionnelle')->store('public/cartes_professionnelles');
+                $userData['carte_professionnelle'] = $request->file('carte_professionnelle')->store('cartes_professionnelles', 'public');
             }
 
             \Log::info('Creating user with data:', $userData);
@@ -202,11 +202,11 @@ class RegisterController extends Controller
                         }
                         if (Schema::hasColumn('medecin_profiles', 'carte_professionnelle')) {
                             $profileData['carte_professionnelle'] = $request->hasFile('carte_professionnelle') ? 
-                                $request->file('carte_professionnelle')->store('public/cartes_professionnelles') : null;
+                                $request->file('carte_professionnelle')->store('cartes_professionnelles', 'public') : null;
                         }
                         if (Schema::hasColumn('medecin_profiles', 'profile_image')) {
                             $profileData['profile_image'] = $request->hasFile('profile_image') ? 
-                                $request->file('profile_image')->store('public/profiles') : null;
+                                $request->file('profile_image')->store('imgs', 'public') : null;
                         }
 
                         // Add new profile fields
@@ -255,8 +255,8 @@ class RegisterController extends Controller
                                 foreach ($files as $i => $file) {
                                     if ($i >= 6) break;
                                     $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                                    $path = $file->storeAs('public/imgs', $filename);
-                                    $imgsPaths[] = str_replace('public/', '', $path);
+                                    $path = $file->storeAs('imgs', $filename, 'public');
+                                    $imgsPaths[] = $path;
                                 }
                                 if (!empty($imgsPaths)) {
                                     $profile->imgs = json_encode($imgsPaths, JSON_UNESCAPED_UNICODE);
@@ -322,9 +322,9 @@ class RegisterController extends Controller
                         'presentation' => $request->presentation,
                         'additional_info' => $request->additional_info,
                         'carte_professionnelle' => $request->hasFile('carte_professionnelle') ? 
-                            $request->file('carte_professionnelle')->store('public/cartes_professionnelles') : null,
+                            $request->file('carte_professionnelle')->store('cartes_professionnelles', 'public') : null,
                         'profile_image' => $request->hasFile('profile_image') ? 
-                            $request->file('profile_image')->store('public/profiles') : null,
+                            $request->file('profile_image')->store('imgs', 'public') : null,
                         'disponible' => true
                     ];
 
@@ -392,7 +392,7 @@ class RegisterController extends Controller
                             foreach ($files as $i => $file) {
                                 if ($i >= 6) break;
                                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                                $path = $file->storeAs('public/imgs', $filename);
+                                $path = $file->storeAs('imgs', $filename, 'public');
                                 $imgsPaths[] = str_replace('public/', '', $path);
                             }
                             if (!empty($imgsPaths)) {

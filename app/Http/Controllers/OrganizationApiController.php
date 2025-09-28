@@ -84,7 +84,8 @@ class OrganizationApiController extends Controller
             if ($request->hasFile('etablissement_image')) {
                 $file = $request->file('etablissement_image');
                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('public/etablissements', $filename);
+                // Store on the 'public' disk under etablissements/
+                $path = $file->storeAs('etablissements', $filename, 'public');
                 $etablissementImagePath = str_replace('public/', '', $path);
             }
 
@@ -92,7 +93,8 @@ class OrganizationApiController extends Controller
             if ($request->hasFile('profile_image')) {
                 $file = $request->file('profile_image');
                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('public/profiles', $filename);
+                // Store on the 'public' disk under profiles/
+                $path = $file->storeAs('profiles', $filename, 'public');
                 $profileImagePath = str_replace('public/', '', $path);
             }
 
@@ -208,7 +210,8 @@ class OrganizationApiController extends Controller
                     foreach ($files as $i => $file) {
                         if ($i >= 6) break; // limit to 6
                         $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                        $path = $file->storeAs('public/imgs', $filename);
+                        // Store on the 'public' disk under imgs/
+                        $path = $file->storeAs('imgs', $filename, 'public');
                         $imgsPaths[] = str_replace('public/', '', $path);
                     }
                     if (!empty($imgsPaths)) {
@@ -558,14 +561,14 @@ class OrganizationApiController extends Controller
             if ($request->hasFile('etablissement_image')) {
                 $file = $request->file('etablissement_image');
                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('public/etablissements', $filename);
+                $path = $file->storeAs('etablissements', $filename, 'public');
                 $validated['etablissement_image'] = str_replace('public/', '', $path);
             }
 
             if ($request->hasFile('profile_image')) {
                 $file = $request->file('profile_image');
                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('public/profiles', $filename);
+                $path = $file->storeAs('profiles', $filename, 'public');
                 $validated['profile_image'] = str_replace('public/', '', $path);
             }
 
@@ -726,7 +729,7 @@ class OrganizationApiController extends Controller
                             $file = $request->file("imgs.$idx");
                             if ($file && $file->isValid()) {
                                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                                $path = $file->storeAs('public/imgs', $filename);
+                                $path = $file->storeAs('imgs', $filename, 'public');
                                 $newImgs[] = str_replace('public/', '', $path);
                             }
                         }
