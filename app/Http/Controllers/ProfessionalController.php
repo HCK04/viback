@@ -85,6 +85,100 @@ class ProfessionalController extends Controller
         return response()->json($profileData);
     }
 
+    /**
+     * Tolerant parser for arrays of JSON objects (e.g., diplomes, experiences),
+     * mirroring ProfileController::parseObjectArrayLoose. Returns an array of associative arrays
+     * when parseable; otherwise returns [].
+     */
+    private function parseObjectArrayLoose($value)
+    {
+        if ($value === null) return [];
+
+        if (is_array($value)) {
+            $out = [];
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    $out[] = $item;
+                } elseif (is_string($item)) {
+                    $d = json_decode($item, true);
+                    if (is_array($d)) {
+                        if (isset($d[0]) || empty($d)) {
+                            foreach ($d as $el) if (is_array($el)) $out[] = $el;
+                        } else {
+                            $out[] = $d;
+                        }
+                    }
+                }
+            }
+            return $out;
+        }
+
+        $tryDecode = function (string $s) {
+            $j = json_decode($s, true);
+            if (is_array($j)) {
+                if (isset($j[0]) || empty($j)) {
+                    $out = [];
+                    foreach ($j as $el) if (is_array($el)) $out[] = $el;
+                    return $out;
+                }
+                return [$j];
+            }
+            if (is_string($j)) {
+                $j2 = json_decode($j, true);
+                if (is_array($j2)) {
+                    if (isset($j2[0]) || empty($j2)) {
+                        $out = [];
+                        foreach ($j2 as $el) if (is_array($el)) $out[] = $el;
+                        return $out;
+                    }
+                    return [$j2];
+                }
+            }
+            return null;
+        };
+
+        if (is_string($value)) {
+            $s = trim((string) $value);
+            if ($s === '') return [];
+
+            $out = $tryDecode($s);
+            if ($out !== null) return $out;
+
+            $s2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $s));
+            $out = $tryDecode($s2);
+            if ($out !== null) return $out;
+
+            $fix = $s2;
+            $fix = preg_replace('/,\s*([}\]])/', '$1', $fix);
+            $fix = preg_replace('/([\{\s,])([A-Za-z0-9_]+)\s*:/', '$1"$2":', $fix);
+            $fix = preg_replace_callback("/'(?:\\'|[^'])*'/", function ($m) {
+                $inner = substr($m[0], 1, -1);
+                $inner = str_replace(['\\"', '"'], ['"', '\\"'], $inner);
+                return '"' . $inner . '"';
+            }, $fix);
+            $out = $tryDecode($fix);
+            if ($out !== null) return $out;
+
+            if (preg_match_all('/\{[^\{\}]*\}/s', $fix, $m) && !empty($m[0])) {
+                $arr = [];
+                foreach ($m[0] as $obj) {
+                    $obj2 = preg_replace('/,\s*}/', '}', $obj);
+                    $obj2 = preg_replace('/([\{\s,])([A-Za-z0-9_]+)\s*:/', '$1"$2":', $obj2);
+                    $obj2 = preg_replace_callback("/'(?:\\'|[^'])*'/", function ($mm) {
+                        $inner = substr($mm[0], 1, -1);
+                        $inner = str_replace(['\\"', '"'], ['"', '\\"'], $inner);
+                        return '"' . $inner . '"';
+                    }, $obj2);
+                    $d = json_decode($obj2, true);
+                    if (is_array($d)) $arr[] = $d;
+                }
+                if (!empty($arr)) return $arr;
+            }
+        }
+
+        return [];
+    }
+
     private function formatProfessionalProfile($user, $profile)
     {
         Log::info("=== FORMATTING PROFESSIONAL PROFILE FOR USER {$user->id} ===");
@@ -163,18 +257,19 @@ class ProfessionalController extends Controller
             $specialties = $parseArray($profile->specialty);
         }
 
-        $diplomes = [];
+        // Diplomas/Experiences: prefer object arrays when parseable; otherwise fallback to cleaned string arrays
+        $diplomesObj = $this->parseObjectArrayLoose($profile->diplomes ?? ($profile->diplomas ?? null));
+        $diplomesFlat = [];
         if (isset($profile->diplomes) && $profile->diplomes !== null && $profile->diplomes !== '') {
-            $diplomes = $parseArray($profile->diplomes);
+            $diplomesFlat = $parseArray($profile->diplomes);
         } elseif (isset($profile->diplomas) && $profile->diplomas !== null && $profile->diplomas !== '') {
-            // Fallback for legacy column name
-            $diplomes = $parseArray($profile->diplomas);
+            $diplomesFlat = $parseArray($profile->diplomas);
         }
+        $diplomes = !empty($diplomesObj) ? $diplomesObj : $diplomesFlat;
 
-        $experiences = [];
-        if (isset($profile->experiences)) {
-            $experiences = $parseArray($profile->experiences);
-        }
+        $experiencesObj = $this->parseObjectArrayLoose($profile->experiences ?? null);
+        $experiencesFlat = isset($profile->experiences) ? $parseArray($profile->experiences) : [];
+        $experiences = !empty($experiencesObj) ? $experiencesObj : $experiencesFlat;
 
         $moyensPaiement = [];
         if (isset($profile->moyens_paiement)) {
