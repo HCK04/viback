@@ -115,6 +115,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/profile/toggle-availability', [ProfessionalProfileController::class, 'toggleAvailability']);
         Route::post('/profile/set-absence', [ProfessionalProfileController::class, 'setAbsence']);
         Route::post('/profile/toggle-vacation-mode', [ProfessionalProfileController::class, 'toggleVacationMode']);
+        Route::delete('/profile', [ProfessionalProfileController::class, 'deleteProfile']);
     });
 
     // Pharmacy profile routes (authenticated)
@@ -174,6 +175,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Organizations (authenticated)
     Route::put('/organizations/{id}', [OrganizationApiController::class, 'update']);
+    Route::delete('/organizations/{id}', [OrganizationApiController::class, 'destroy']);
+
+    // Universal profile delete by user ID (owner or admin)
+    Route::delete('/profiles/{id}', [App\Http\Controllers\ProfileController::class, 'destroy']);
 
     // Secure media audit endpoint (authenticated only)
     Route::get('/media/audit', [MediaAuditController::class, 'audit'])->middleware('throttle:30,1');

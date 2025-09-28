@@ -715,6 +715,67 @@ class ProfileController extends Controller
     }
 
     /**
+     * Delete any professional/organization profile rows for the given user ID.
+     * Owner or admin only. Does NOT delete the user account.
+     */
+    public function destroy($id)
+    {
+        try {
+            $auth = auth()->user();
+            if (!$auth) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            $isAdmin = false;
+            try { $isAdmin = strtolower(optional($auth->role)->name) === 'admin'; } catch (\Throwable $e) { $isAdmin = false; }
+            $isOwner = ((int)$auth->id === (int)$id);
+            if (!$isOwner && !$isAdmin) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $deletedCounts = [];
+            $total = 0;
+            $tables = [
+                'medecin_profiles',
+                'kine_profiles',
+                'orthophoniste_profiles',
+                'psychologue_profiles',
+                'clinique_profiles',
+                'pharmacie_profiles',
+                'parapharmacie_profiles',
+                'labo_analyse_profiles',
+                'centre_radiologie_profiles',
+            ];
+
+            foreach ($tables as $tbl) {
+                if (!Schema::hasTable($tbl)) continue;
+                try {
+                    $count = DB::table($tbl)->where('user_id', $id)->delete();
+                    if ($count > 0) {
+                        $deletedCounts[$tbl] = $count;
+                        $total += $count;
+                    }
+                } catch (\Exception $e) {
+                    // Continue other tables, but log
+                    Log::warning('Failed deleting from table', ['table' => $tbl, 'id' => $id, 'error' => $e->getMessage()]);
+                }
+            }
+
+            return response()->json([
+                'message' => $total > 0 ? 'Profile rows deleted' : 'No profile rows found for user',
+                'deleted' => $total,
+                'by_table' => $deletedCounts
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error deleting profile rows', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Error deleting profile rows', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Tolerant parser for arrays of JSON objects (e.g., diplomes, experiences).
      * Accepts arrays, single object, JSON strings (double-encoded, with CR/LF, single quotes, unquoted keys, trailing commas).
      */

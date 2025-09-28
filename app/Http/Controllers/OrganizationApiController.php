@@ -767,6 +767,70 @@ class OrganizationApiController extends Controller
     }
 
     /**
+     * Delete organization profile by user ID (owner or admin only)
+     */
+    public function destroy($id)
+    {
+        try {
+            $auth = auth()->user();
+            if (!$auth) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            $isAdmin = false;
+            try { $isAdmin = strtolower(optional($auth->role)->name) === 'admin'; } catch (\Throwable $e) { $isAdmin = false; }
+            $isOwner = ((int)$auth->id === (int)$id);
+            if (!$isOwner && !$isAdmin) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $user = User::with('role')->find($id);
+            if (!$user) {
+                return response()->json(['message' => 'Organization not found'], 404);
+            }
+
+            // Determine organization type using role or by probing known profile tables
+            $roleName = $user->role->name ?? null;
+            $orgTypes = ['clinique', 'pharmacie', 'parapharmacie', 'labo_analyse', 'centre_radiologie'];
+            if (!$roleName || !in_array($roleName, $orgTypes)) {
+                if (CliniqueProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'clinique';
+                } elseif (PharmacieProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'pharmacie';
+                } elseif (ParapharmacieProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'parapharmacie';
+                } elseif (LaboAnalyseProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'labo_analyse';
+                } elseif (CentreRadiologieProfile::where('user_id', $id)->exists()) {
+                    $roleName = 'centre_radiologie';
+                }
+            }
+
+            if (!$roleName || !in_array($roleName, $orgTypes)) {
+                return response()->json(['message' => 'Not an organization account'], 404);
+            }
+
+            $modelClass = $this->getModelClass($roleName);
+            $deleted = $modelClass::where('user_id', $id)->delete();
+
+            return response()->json([
+                'message' => $deleted ? 'Organization profile deleted' : 'No organization profile to delete',
+                'deleted' => (int)$deleted
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting organization profile', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+                'line' => $e->getLine()
+            ]);
+            return response()->json([
+                'message' => 'Error deleting organization profile',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Normalize a stored media path to a web-accessible '/storage/...' URL path.
      */
     private function normalizeMediaPath($path)

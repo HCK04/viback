@@ -814,4 +814,70 @@ class ProfessionalProfileController extends Controller
             return response()->json(['error' => 'Failed to update vacation mode: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Delete the authenticated user's professional/organization profile row.
+     */
+    public function deleteProfile(Request $request)
+    {
+        try {
+            $auth = auth()->user();
+            if (!$auth) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            $isAdmin = false;
+            try { $isAdmin = strtolower(optional($auth->role)->name) === 'admin'; } catch (\Throwable $e) { $isAdmin = false; }
+            $userId = (int)$auth->id;
+
+            // Resolve role name
+            $roleEntity = null;
+            try { $roleEntity = $auth->role; } catch (\Throwable $e) { $roleEntity = null; }
+            $roleName = strtolower(($roleEntity->name ?? ($auth->role_name ?? '')));
+
+            // Map role to model
+            $model = null;
+            switch ($roleName) {
+                case 'medecin':
+                case 'doctor':
+                    $model = MedecinProfile::class; break;
+                case 'kine':
+                    $model = KineProfile::class; break;
+                case 'orthophoniste':
+                    $model = OrthophonisteProfile::class; break;
+                case 'psychologue':
+                    $model = PsychologueProfile::class; break;
+                case 'clinique':
+                    $model = CliniqueProfile::class; break;
+                case 'pharmacie':
+                    $model = PharmacieProfile::class; break;
+                case 'parapharmacie':
+                    $model = ParapharmacieProfile::class; break;
+                case 'labo_analyse':
+                    $model = LaboAnalyseProfile::class; break;
+                case 'centre_radiologie':
+                    $model = CentreRadiologieProfile::class; break;
+                default:
+                    $model = null; break;
+            }
+
+            if ($model === null) {
+                return response()->json(['message' => 'Unsupported role or profile not found'], 404);
+            }
+
+            // Delete profile by user_id
+            $deleted = $model::where('user_id', $userId)->delete();
+
+            return response()->json([
+                'message' => $deleted ? 'Profile deleted' : 'No profile to delete',
+                'deleted' => (int)$deleted
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting profile row: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['error' => 'Failed to delete profile: ' . $e->getMessage()], 500);
+        }
+    }
 }
