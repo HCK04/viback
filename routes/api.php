@@ -23,6 +23,7 @@ use App\Http\Controllers\PharmacyProfileController;
 use App\Http\Controllers\ParapharmacyApiController;
 use App\Http\Controllers\ProfileSlugController;
 use App\Http\Controllers\MediaAuditController;
+use App\Http\Controllers\MediaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -117,6 +118,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/profile/toggle-vacation-mode', [ProfessionalProfileController::class, 'toggleVacationMode']);
         Route::delete('/profile', [ProfessionalProfileController::class, 'deleteProfile']);
     });
+
+    // Secure media streaming (owner-only)
+    Route::get('/media/professional/carte', [MediaController::class, 'showProfessionalCarte'])->middleware('throttle:30,1');
 
     // Pharmacy profile routes (authenticated)
     Route::prefix('pharmacy')->group(function () {
