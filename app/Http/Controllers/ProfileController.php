@@ -340,11 +340,20 @@ class ProfileController extends Controller
                 if (is_array($raw)) return $raw;
                 if (is_string($raw)) {
                     $d = json_decode($raw, true);
-                    if (is_array($d)) return $d;
+                    if (is_array($d)) {
+                        // If decoded to associative object, wrap into array for UI consistency
+                        if (!isset($d[0]) && !empty($d)) return [$d];
+                        return $d;
+                    }
                     // Try unescaped JSON
                     $raw2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $raw));
                     $d2 = json_decode($raw2, true);
-                    if (is_array($d2)) return $d2;
+                    if (is_array($d2)) {
+                        if (!isset($d2[0]) && !empty($d2)) return [$d2];
+                        return $d2;
+                    }
+                    // Fallback: treat plain string as a single-item list
+                    return [ (string) $raw ];
                 }
                 return [];
             })(),
@@ -355,10 +364,17 @@ class ProfileController extends Controller
                 if (is_array($raw)) return $raw;
                 if (is_string($raw)) {
                     $d = json_decode($raw, true);
-                    if (is_array($d)) return $d;
+                    if (is_array($d)) {
+                        if (!isset($d[0]) && !empty($d)) return [$d];
+                        return $d;
+                    }
                     $raw2 = stripcslashes(str_replace(["\r", "\n"], ["\\r", "\\n"], $raw));
                     $d2 = json_decode($raw2, true);
-                    if (is_array($d2)) return $d2;
+                    if (is_array($d2)) {
+                        if (!isset($d2[0]) && !empty($d2)) return [$d2];
+                        return $d2;
+                    }
+                    return [ (string) $raw ];
                 }
                 return [];
             })(),

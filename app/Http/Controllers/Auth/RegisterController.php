@@ -193,11 +193,24 @@ class RegisterController extends Controller
                         $profileData['horaire_end'] = $request->horaire_end;
                         $profileData['additional_info'] = $request->additional_info;
 
-                        // Add optional fields only if they exist in the table
-                        if (Schema::hasColumn('medecin_profiles', 'diplomes')) {
+                        // Add diplomas/experiences with dynamic column detection (align with other roles)
+                        try {
+                            $hasDiplomesCol = Schema::hasColumn('medecin_profiles', 'diplomes');
+                            $hasDiplomasCol = Schema::hasColumn('medecin_profiles', 'diplomas');
+                            $hasExperiencesCol = Schema::hasColumn('medecin_profiles', 'experiences');
+
+                            if ($hasDiplomesCol) {
+                                $profileData['diplomes'] = json_encode($diplomesData, JSON_UNESCAPED_UNICODE);
+                            }
+                            if ($hasDiplomasCol) {
+                                $profileData['diplomas'] = json_encode($diplomesData, JSON_UNESCAPED_UNICODE);
+                            }
+                            if ($hasExperiencesCol) {
+                                $profileData['experiences'] = json_encode($experiencesData, JSON_UNESCAPED_UNICODE);
+                            }
+                        } catch (\Throwable $e) {
+                            // Fallback if schema check fails unexpectedly
                             $profileData['diplomes'] = json_encode($diplomesData, JSON_UNESCAPED_UNICODE);
-                        }
-                        if (Schema::hasColumn('medecin_profiles', 'experiences')) {
                             $profileData['experiences'] = json_encode($experiencesData, JSON_UNESCAPED_UNICODE);
                         }
                         if (Schema::hasColumn('medecin_profiles', 'carte_professionnelle')) {
