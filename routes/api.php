@@ -24,6 +24,7 @@ use App\Http\Controllers\ParapharmacyApiController;
 use App\Http\Controllers\ProfileSlugController;
 use App\Http\Controllers\MediaAuditController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\DeviceTokenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -135,6 +136,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
+    // Device Tokens (Push Notifications)
+    Route::post('/devices', [DeviceTokenController::class, 'register']);
+    Route::delete('/devices/{token}', [DeviceTokenController::class, 'unregister']);
+    Route::get('/devices', [DeviceTokenController::class, 'index']);
+
     // Doctor routes
     Route::prefix('doctor')->group(function () {
         Route::get('/stats', [DashboardController::class, 'doctorStats']);
@@ -174,8 +180,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/documents/{id}', [\App\Http\Controllers\PatientSanteController::class, 'deleteDocument']);
     });
 
-    // Medecins
-    Route::get('/medecins', [MedecinController::class, 'index']);
+    // Medecins (authenticated variant moved to avoid overriding public route)
+    Route::get('/doctor/medecins', [MedecinController::class, 'index']);
 
     // Organizations (authenticated)
     Route::put('/organizations/{id}', [OrganizationApiController::class, 'update']);
