@@ -1,0 +1,171 @@
+================================================================================
+Vi-Santé Database Information
+================================================================================
+
+DATABASE FILE: visante.sql
+Location: /home/super_user_zakaria/Dev/vi/viback/visante.sql
+Size: 1782 lines
+Export Date: October 26, 2025
+Source: phpMyAdmin (MariaDB 10.4.32)
+
+================================================================================
+IMPORT OPTIONS
+================================================================================
+
+Option 1: Automatic (via setup.sh)
+----------------------------------
+The setup.sh script automatically detects and imports visante.sql
+
+Command:
+  ./setup.sh
+
+What it does:
+  ✓ Builds Docker containers
+  ✓ Installs dependencies
+  ✓ Generates app key
+  ✓ Imports visante.sql (if exists)
+  ✓ Sets up storage
+  ✓ Fixes permissions
+
+
+Option 2: Standalone Import
+---------------------------
+Use dedicated import script if containers are already running
+
+Command:
+  ./import-db.sh
+
+What it does:
+  ✓ Checks MySQL is running
+  ✓ Creates backup of existing data
+  ✓ Drops and recreates database
+  ✓ Imports visante.sql
+  ✓ Verifies import
+  ✓ Shows statistics
+
+
+Option 3: Manual Import
+-----------------------
+For advanced users who want full control
+
+Commands:
+  docker-compose up -d mysql
+  sleep 30
+  docker-compose exec -T mysql mysql -u visante -psecret visante < visante.sql
+
+================================================================================
+DATABASE STRUCTURE
+================================================================================
+
+The database contains tables for:
+
+Users & Authentication:
+  - users
+  - roles
+  - role_categories
+  - personal_access_tokens (Sanctum)
+
+Profiles:
+  - patient_profiles
+  - medecin_profiles
+  - clinique_profiles
+  - pharmacie_profiles
+  - parapharmacie_profiles
+  - centre_radiologie_profiles
+  - labo_analyse_profiles
+
+Features:
+  - appointments (rdvs)
+  - annonces
+  - notifications
+  - subscriptions
+
+Character Set: utf8mb4_unicode_ci (supports French, Arabic, emojis)
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After import, verify with:
+
+1. Check tables:
+   docker-compose exec mysql mysql -u visante -psecret visante -e "SHOW TABLES;"
+
+2. Check users:
+   docker-compose exec mysql mysql -u visante -psecret visante -e "SELECT COUNT(*) FROM users;"
+
+3. Access phpMyAdmin:
+   http://localhost:8080
+   Username: visante
+   Password: secret
+
+4. Test API:
+   curl http://localhost:8000/api/site-stats
+
+================================================================================
+CREDENTIALS
+================================================================================
+
+MySQL Database:
+  Host: mysql (container name) or localhost:3306 (from host)
+  Database: visante
+  Username: visante
+  Password: secret
+  Root Password: root
+
+phpMyAdmin:
+  URL: http://localhost:8080
+  Username: visante
+  Password: secret
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Import fails?
+  → Check MySQL is ready: docker-compose logs mysql
+  → Wait 30 seconds after starting containers
+  → Verify file exists: ls -lh visante.sql
+
+Character encoding issues?
+  → Database uses utf8mb4_unicode_ci
+  → Check file encoding: file visante.sql
+
+Need to re-import?
+  → Run: ./import-db.sh (creates backup first)
+
+================================================================================
+DOCUMENTATION
+================================================================================
+
+Full guides available:
+  - DATABASE_IMPORT.md - Complete import guide
+  - README_DOCKER.md - Main Docker guide
+  - QUICK_START.md - Quick reference
+  - DOCKER_SETUP.md - Detailed setup
+  - DOCKER_SUMMARY.md - Technical details
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Import database:
+   ./setup.sh  (or ./import-db.sh if already set up)
+
+2. Verify import:
+   docker-compose exec mysql mysql -u visante -psecret visante -e "SHOW TABLES;"
+
+3. Test API:
+   curl http://localhost:8000/api/site-stats
+
+4. Access phpMyAdmin:
+   http://localhost:8080
+
+5. Connect mobile app:
+   Update API URL to http://localhost:8000/api
+
+================================================================================
+
+Ready to import! Run: ./setup.sh
+
+================================================================================

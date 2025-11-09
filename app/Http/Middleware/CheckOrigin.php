@@ -18,6 +18,16 @@ class CheckOrigin
 
         $isProduction = app()->environment('production') || (config('app.debug') === false);
 
+        // Check if this is a mobile app request
+        $isMobileApp = $request->header('X-Client-Type') === 'mobile';
+        
+        // Allow mobile app requests to proceed
+        // Protected routes will still be validated by auth:sanctum middleware
+        if ($isMobileApp) {
+            return $next($request);
+        }
+
+        // Existing Origin/Referer checks for web traffic
         $origin = $request->headers->get('Origin');
         if ($origin) {
             $host = parse_url($origin, PHP_URL_HOST);
