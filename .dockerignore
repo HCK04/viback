@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README.md
+CHANGELOG.md
+
+# IDE
+.idea
+.vscode
+*.swp
+.DS_Store
+
+# Dependencies
+/vendor/
+node_modules/
+
+# Environment
+.env.*.local
+.env.production
+
+# Build artifacts
+/storage/*
+!/storage/.gitignore
+bootstrap/cache/
+/public/storage
+
+# Tests
+/tests/
+phpunit.xml
+.phpunit.result.cache
+
+# Misc
+*.sql
+*.sqlite
+*.bak
+*.backup
+*.zip
+*.tar.gz
+*.log

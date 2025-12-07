@@ -24,6 +24,7 @@ use App\Http\Controllers\ParapharmacyApiController;
 use App\Http\Controllers\ProfileSlugController;
 use App\Http\Controllers\MediaAuditController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\DeviceTokenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,9 +37,9 @@ use App\Http\Controllers\MediaController;
 |
 */
 
-// Public routes
-Route::post('/login', [LoginController::class, 'login']);
-Route::post('/register', [RegisterController::class, 'register']);
+// Public routes (with rate limiting for security)
+Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:3,1');
 Route::post('/organizations/register', [OrganizationApiController::class, 'register']);
 Route::post('/check-email', [EmailCheckController::class, 'check']);
 Route::post('/check-availability', [ValidationController::class, 'checkAvailability']);
@@ -98,7 +99,7 @@ Route::get('/pharmacies/search/city', [App\Http\Controllers\PharmacyApiControlle
 Route::middleware('auth:sanctum')->group(function () {
     // User info
     Route::get('/user', [UserController::class, 'user']);
-    
+
     // User profile (for patients only)
     Route::get('/user/profile', [UserController::class, 'profile']);
     Route::put('/user/profile', [UserController::class, 'updateProfile']);
@@ -134,6 +135,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+    // Device Tokens (Push Notifications)
+    Route::post('/devices', [DeviceTokenController::class, 'register']);
+    Route::delete('/devices/{token}', [DeviceTokenController::class, 'unregister']);
+    Route::get('/devices', [DeviceTokenController::class, 'index']);
 
     // Doctor routes
     Route::prefix('doctor')->group(function () {
@@ -174,8 +180,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/documents/{id}', [\App\Http\Controllers\PatientSanteController::class, 'deleteDocument']);
     });
 
-    // Medecins
-    Route::get('/medecins', [MedecinController::class, 'index']);
+    // Medecins (authenticated variant moved to avoid overriding public route)
+    Route::get('/doctor/medecins', [MedecinController::class, 'index']);
 
     // Organizations (authenticated)
     Route::put('/organizations/{id}', [OrganizationApiController::class, 'update']);
@@ -184,8 +190,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Universal profile delete by user ID (owner or admin)
     Route::delete('/profiles/{id}', [App\Http\Controllers\ProfileController::class, 'destroy']);
 
-    // Secure media audit endpoint (authenticated only)
-    Route::get('/media/audit', [MediaAuditController::class, 'audit'])->middleware('throttle:30,1');
+    // Secure media audit endpoint (disabled - MediaAuditController not implemented)
+    // Route::get('/media/audit', [MediaAuditController::class, 'audit'])->middleware('throttle:30,1');
 
     // Appointment booking routes (aliases for rendezvous)
     Route::post('/rendezvous', [AppointmentController::class, 'store']);
@@ -198,7 +204,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/appointments/{id}/cancel', [AppointmentController::class, 'cancel']);
     Route::delete('/appointments/{id}', [AppointmentController::class, 'destroy']);
     Route::get('/doctors/{id}/available-hours', [MedecinController::class, 'availableHours']);
-    
+
     // Stripe subscription routes (disabled in production)
     // To re-enable, uncomment the block below and ensure proper keys are set.
     // Route::prefix('stripe')->group(function () {
@@ -209,12 +215,14 @@ Route::middleware('auth:sanctum')->group(function () {
     //     Route::get('/subscription-details/{userId}', [StripeController::class, 'getSubscriptionDetails']);
     // });
 
-    // Admin routes
-    Route::get('/admin/users', [UserController::class, 'index']);
-    Route::post('/admin/users', [UserController::class, 'store']);
-    Route::put('/admin/users/{id}', [UserController::class, 'update']);
-    Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
-    Route::get('/roles', [UserController::class, 'roles']);
+    // Admin routes (protected by admin middleware)
+    Route::middleware('admin')->prefix('admin')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::put('/users/{id}', [UserController::class, 'update']);
+        Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    });
+    Route::middleware('admin')->get('/roles', [UserController::class, 'roles']);
 });
 
 // Stripe webhook (disabled)
