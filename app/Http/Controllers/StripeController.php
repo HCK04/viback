@@ -16,8 +16,8 @@ class StripeController extends Controller
 {
     public function __construct()
     {
-        // Set Stripe secret key
-        \Stripe\Stripe::setApiKey(env('STRIPE_SECRET_KEY'));
+        // Set Stripe secret key from config (cached properly)
+        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
     }
 
     /**
@@ -77,20 +77,22 @@ class StripeController extends Controller
             $session = \Stripe\Checkout\Session::create([
                 'customer' => $stripeCustomer->id,
                 'payment_method_types' => ['card'],
-                'line_items' => [[
-                    'price_data' => [
-                        'currency' => $plan['currency'],
-                        'product_data' => [
-                            'name' => $plan['name'],
-                            'description' => 'Abonnement ViSanté - ' . $plan['name']
+                'line_items' => [
+                    [
+                        'price_data' => [
+                            'currency' => $plan['currency'],
+                            'product_data' => [
+                                'name' => $plan['name'],
+                                'description' => 'Abonnement ViSanté - ' . $plan['name']
+                            ],
+                            'unit_amount' => $plan['price'],
+                            'recurring' => [
+                                'interval' => $plan['interval']
+                            ]
                         ],
-                        'unit_amount' => $plan['price'],
-                        'recurring' => [
-                            'interval' => $plan['interval']
-                        ]
-                    ],
-                    'quantity' => 1,
-                ]],
+                        'quantity' => 1,
+                    ]
+                ],
                 'mode' => 'subscription',
                 'success_url' => $request->success_url . '?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => $request->cancel_url,
@@ -246,10 +248,10 @@ class StripeController extends Controller
     {
         $payload = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature');
-        $endpointSecret = env('STRIPE_WEBHOOK_SECRET');
+        $endpointSecret = config('services.stripe.webhook_secret');
 
         try {
-            $event = \Stripe\Webhook::constructEvent($payload, $sigHeader, env('STRIPE_WEBHOOK_SECRET'));
+            $event = \Stripe\Webhook::constructEvent($payload, $sigHeader, config('services.stripe.webhook_secret'));
         } catch (\Stripe\Exception\SignatureVerificationException $e) {
             Log::error('Webhook signature verification failed: ' . $e->getMessage());
             return response('', 400);
@@ -354,7 +356,7 @@ class StripeController extends Controller
     private function handleSubscriptionUpdated($subscription)
     {
         $localSubscription = Subscription::where('stripe_subscription_id', $subscription['id'])->first();
-        
+
         if ($localSubscription) {
             $localSubscription->update([
                 'status' => $subscription['status'],
@@ -377,10 +379,10 @@ class StripeController extends Controller
     private function handleSubscriptionDeleted($subscription)
     {
         $localSubscription = Subscription::where('stripe_subscription_id', $subscription['id'])->first();
-        
+
         if ($localSubscription) {
             $localSubscription->update(['status' => 'canceled']);
-            
+
             // Update user status
             $user = $localSubscription->user;
             $user->update([

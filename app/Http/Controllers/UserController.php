@@ -45,12 +45,24 @@ class UserController extends Controller
 
             if ($roleName && in_array($roleName, $orgTypes)) {
                 // Map role to relation and name field
-                $relation = null; $nameField = null;
-                if ($roleName === 'clinique') { $relation = 'cliniqueProfile'; $nameField = 'nom_clinique'; }
-                elseif ($roleName === 'pharmacie') { $relation = 'pharmacieProfile'; $nameField = 'nom_pharmacie'; }
-                elseif ($roleName === 'parapharmacie') { $relation = 'parapharmacieProfile'; $nameField = 'nom_parapharmacie'; }
-                elseif ($roleName === 'labo_analyse') { $relation = 'laboAnalyseProfile'; $nameField = 'nom_labo'; }
-                elseif ($roleName === 'centre_radiologie') { $relation = 'centreRadiologieProfile'; $nameField = 'nom_centre'; }
+                $relation = null;
+                $nameField = null;
+                if ($roleName === 'clinique') {
+                    $relation = 'cliniqueProfile';
+                    $nameField = 'nom_clinique';
+                } elseif ($roleName === 'pharmacie') {
+                    $relation = 'pharmacieProfile';
+                    $nameField = 'nom_pharmacie';
+                } elseif ($roleName === 'parapharmacie') {
+                    $relation = 'parapharmacieProfile';
+                    $nameField = 'nom_parapharmacie';
+                } elseif ($roleName === 'labo_analyse') {
+                    $relation = 'laboAnalyseProfile';
+                    $nameField = 'nom_labo';
+                } elseif ($roleName === 'centre_radiologie') {
+                    $relation = 'centreRadiologieProfile';
+                    $nameField = 'nom_centre';
+                }
 
                 $user->load($relation);
                 $profile = $user->{$relation};
@@ -68,8 +80,10 @@ class UserController extends Controller
 
                 // Decode helper
                 $decode = function ($value) {
-                    if (is_null($value)) return [];
-                    if (is_array($value)) return $value;
+                    if (is_null($value))
+                        return [];
+                    if (is_array($value))
+                        return $value;
                     if (is_string($value)) {
                         $decoded = json_decode($value, true);
                         return $decoded !== null ? $decoded : $value;
@@ -172,7 +186,7 @@ class UserController extends Controller
         $user = auth()->user();
 
         $request->validate([
-            'avatar' => 'required|image|max:3072', // 3MB max
+            'avatar' => 'required|image|mimes:jpeg,png,gif,webp|max:3072', // 3MB max, specific types only
         ]);
 
         if ($request->hasFile('avatar')) {
@@ -306,7 +320,7 @@ class UserController extends Controller
 
             // Update professional profiles based on role
             $professionalProfile = null;
-            
+
             if (in_array($user->role_id, [2, 4])) { // Medecin role ID
                 $professionalProfile = $user->medecinProfile;
                 if (!$professionalProfile) {
@@ -353,7 +367,7 @@ class UserController extends Controller
                 if ($request->filled('additional_info')) {
                     $professionalProfile->additional_info = $request->additional_info;
                 }
-                
+
                 // Handle separate time fields
                 if ($request->filled('horaire_start')) {
                     $professionalProfile->horaire_start = $request->horaire_start;
@@ -361,7 +375,7 @@ class UserController extends Controller
                 if ($request->filled('horaire_end')) {
                     $professionalProfile->horaire_end = $request->horaire_end;
                 }
-                
+
                 // Keep backward compatibility with horaires JSON
                 if ($request->filled('horaire_start') && $request->filled('horaire_end')) {
                     $professionalProfile->horaires = json_encode([
@@ -427,8 +441,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             \Log::error('Error updating profile: ' . $e->getMessage(), [
                 'user_id' => auth()->id(),
-                'request_data' => $request->all(),
-                'trace' => $e->getTraceAsString()
+                // Sensitive request data removed for security
             ]);
             return response()->json(['error' => 'Failed to update profile: ' . $e->getMessage()], 500);
         }
@@ -476,10 +489,10 @@ class UserController extends Controller
                 '/^https?:\/\/[a-z0-9-]+\.xn--vi-sant-hya\.com$/',
             ];
 
-            $isAllowed = in_array($origin, $allowedOrigins) || 
-                        collect($allowedPatterns)->contains(function ($pattern) use ($origin) {
-                            return $origin && preg_match($pattern, $origin);
-                        });
+            $isAllowed = in_array($origin, $allowedOrigins) ||
+                collect($allowedPatterns)->contains(function ($pattern) use ($origin) {
+                    return $origin && preg_match($pattern, $origin);
+                });
 
             if (!$isAllowed) {
                 \Log::warning('Blocked request from unauthorized origin: ' . $origin);
@@ -512,31 +525,31 @@ class UserController extends Controller
                 'laboAnalyseProfile',
                 'centreRadiologieProfile'
             ])
-            ->whereHas('role', function($query) {
-                // Exclude admin (id=1) and patient roles - include all healthcare professionals and organizations
-                $query->whereNotIn('name', ['admin', 'patient']);
-            })
-            ->get();
+                ->whereHas('role', function ($query) {
+                    // Exclude admin (id=1) and patient roles - include all healthcare professionals and organizations
+                    $query->whereNotIn('name', ['admin', 'patient']);
+                })
+                ->get();
 
             \Log::info('PublicSearch: Found ' . $users->count() . ' users after role filtering');
 
             \Log::info('Found users count:', ['count' => $users->count()]);
 
-            $processedUsers = $users->map(function($user) use ($latitude, $longitude) {
+            $processedUsers = $users->map(function ($user) use ($latitude, $longitude) {
                 // Add profile data directly to user object for easier frontend access
                 $profileData = null;
                 $ville = null;
                 $isInVacationMode = false;
-                
+
                 try {
                     if ($user->medecinProfile) {
                         $profileData = $user->medecinProfile->toArray();
                         // Remove sensitive data - do NOT include carte_professionnelle
                         unset($profileData['carte_professionnelle']);
-                        
+
                         // Check vacation mode (using disponible column - inverse logic)
                         $isInVacationMode = !($user->medecinProfile->disponible ?? true);
-                        
+
                         // Decode JSON fields for frontend display
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
@@ -547,52 +560,52 @@ class UserController extends Controller
                         if (isset($profileData['specialty']) && is_string($profileData['specialty'])) {
                             $profileData['specialty'] = json_decode($profileData['specialty'], true);
                         }
-                        
+
                         $ville = $user->medecinProfile->ville ?? null;
                     } elseif ($user->kineProfile) {
                         $profileData = $user->kineProfile->toArray();
                         unset($profileData['carte_professionnelle']);
-                        
+
                         // Check vacation mode (using disponible column - inverse logic)
                         $isInVacationMode = !($user->kineProfile->disponible ?? true);
-                        
+
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
                         }
                         if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
                             $profileData['experiences'] = json_decode($profileData['experiences'], true);
                         }
-                        
+
                         $ville = $user->kineProfile->ville ?? null;
                     } elseif ($user->orthophonisteProfile) {
                         $profileData = $user->orthophonisteProfile->toArray();
                         unset($profileData['carte_professionnelle']);
-                        
+
                         // Check vacation mode (using disponible column - inverse logic)
                         $isInVacationMode = !($user->orthophonisteProfile->disponible ?? true);
-                        
+
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
                         }
                         if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
                             $profileData['experiences'] = json_decode($profileData['experiences'], true);
                         }
-                        
+
                         $ville = $user->orthophonisteProfile->ville ?? null;
                     } elseif ($user->psychologueProfile) {
                         $profileData = $user->psychologueProfile->toArray();
                         unset($profileData['carte_professionnelle']);
-                        
+
                         // Check vacation mode (using disponible column - inverse logic)
                         $isInVacationMode = !($user->psychologueProfile->disponible ?? true);
-                        
+
                         if (isset($profileData['diplomes']) && is_string($profileData['diplomes'])) {
                             $profileData['diplomes'] = json_decode($profileData['diplomes'], true);
                         }
                         if (isset($profileData['experiences']) && is_string($profileData['experiences'])) {
                             $profileData['experiences'] = json_decode($profileData['experiences'], true);
                         }
-                        
+
                         $ville = $user->psychologueProfile->ville ?? null;
                     } elseif ($user->cliniqueProfile) {
                         $profileData = $user->cliniqueProfile->toArray();
@@ -621,43 +634,43 @@ class UserController extends Controller
                         'error' => $e->getMessage()
                     ]);
                 }
-                
+
                 // Skip users in vacation mode from search results
                 if ($isInVacationMode) {
                     return null;
                 }
-                
+
                 // Add ville and profile data to main user object
                 $user->ville = $ville;
                 $user->profile_data = $profileData;
-                
+
                 // Calculate distance if coordinates are provided
                 if ($latitude && $longitude && $profileData && isset($profileData['latitude']) && isset($profileData['longitude'])) {
                     $distance = $this->calculateDistance($latitude, $longitude, $profileData['latitude'], $profileData['longitude']);
                     $user->distance = $distance;
                 }
-                
+
                 return $user;
             })
-            ->filter(function($user) use ($latitude, $longitude, $radius) {
-                // Filter out null users (those in vacation mode)
-                if ($user === null) {
-                    return false;
-                }
-                
-                // Only return users that have a ville (city) set
-                if (empty($user->ville)) {
-                    return false;
-                }
-                
-                // If coordinates and radius are provided, filter by distance
-                if ($latitude && $longitude && $radius && isset($user->distance)) {
-                    return $user->distance <= $radius;
-                }
-                
-                return true;
-            })
-            ->values(); // Reset array keys after filtering
+                ->filter(function ($user) use ($latitude, $longitude, $radius) {
+                    // Filter out null users (those in vacation mode)
+                    if ($user === null) {
+                        return false;
+                    }
+
+                    // Only return users that have a ville (city) set
+                    if (empty($user->ville)) {
+                        return false;
+                    }
+
+                    // If coordinates and radius are provided, filter by distance
+                    if ($latitude && $longitude && $radius && isset($user->distance)) {
+                        return $user->distance <= $radius;
+                    }
+
+                    return true;
+                })
+                ->values(); // Reset array keys after filtering
 
             return response()->json([
                 'data' => $processedUsers->toArray(),
@@ -762,7 +775,7 @@ class UserController extends Controller
     {
         try {
             $user = User::findOrFail($id);
-            
+
             // Check for relationships if methods exist
             $hasRelationships = false;
             if (method_exists($user, 'rdvs') && $user->rdvs()->count() > 0) {
@@ -771,7 +784,7 @@ class UserController extends Controller
             if (method_exists($user, 'annonces') && $user->annonces()->count() > 0) {
                 $hasRelationships = true;
             }
-            
+
             if ($hasRelationships) {
                 return response()->json([
                     'message' => 'Cannot delete user with associated appointments or announcements'
@@ -804,12 +817,14 @@ class UserController extends Controller
                 if (method_exists($user, 'rdvs') && $user->rdvs()->count() > 0) {
                     $hasRelationships = true;
                 }
-            } catch (\Throwable $t) { /* ignore */ }
+            } catch (\Throwable $t) { /* ignore */
+            }
             try {
                 if (method_exists($user, 'annonces') && $user->annonces()->count() > 0) {
                     $hasRelationships = true;
                 }
-            } catch (\Throwable $t) { /* ignore */ }
+            } catch (\Throwable $t) { /* ignore */
+            }
 
             if ($hasRelationships) {
                 return response()->json([
@@ -818,27 +833,85 @@ class UserController extends Controller
             }
 
             // Best-effort cleanup of profile rows (to avoid orphans)
-            try { if (method_exists($user, 'patientProfile') && $user->patientProfile) { $user->patientProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'profile') && $user->profile) { $user->profile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'medecinProfile') && $user->medecinProfile) { $user->medecinProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'kineProfile') && $user->kineProfile) { $user->kineProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'orthophonisteProfile') && $user->orthophonisteProfile) { $user->orthophonisteProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'psychologueProfile') && $user->psychologueProfile) { $user->psychologueProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'cliniqueProfile') && $user->cliniqueProfile) { $user->cliniqueProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'pharmacieProfile') && $user->pharmacieProfile) { $user->pharmacieProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'parapharmacieProfile') && $user->parapharmacieProfile) { $user->parapharmacieProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'laboAnalyseProfile') && $user->laboAnalyseProfile) { $user->laboAnalyseProfile->delete(); } } catch (\Throwable $t) {}
-            try { if (method_exists($user, 'centreRadiologieProfile') && $user->centreRadiologieProfile) { $user->centreRadiologieProfile->delete(); } } catch (\Throwable $t) {}
+            try {
+                if (method_exists($user, 'patientProfile') && $user->patientProfile) {
+                    $user->patientProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'profile') && $user->profile) {
+                    $user->profile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'medecinProfile') && $user->medecinProfile) {
+                    $user->medecinProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'kineProfile') && $user->kineProfile) {
+                    $user->kineProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'orthophonisteProfile') && $user->orthophonisteProfile) {
+                    $user->orthophonisteProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'psychologueProfile') && $user->psychologueProfile) {
+                    $user->psychologueProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'cliniqueProfile') && $user->cliniqueProfile) {
+                    $user->cliniqueProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'pharmacieProfile') && $user->pharmacieProfile) {
+                    $user->pharmacieProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'parapharmacieProfile') && $user->parapharmacieProfile) {
+                    $user->parapharmacieProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'laboAnalyseProfile') && $user->laboAnalyseProfile) {
+                    $user->laboAnalyseProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
+            try {
+                if (method_exists($user, 'centreRadiologieProfile') && $user->centreRadiologieProfile) {
+                    $user->centreRadiologieProfile->delete();
+                }
+            } catch (\Throwable $t) {
+            }
 
             // Finally, delete the user
             $user->delete();
 
             // Revoke tokens if any
-            try { $request->user()->currentAccessToken()->delete(); } catch (\Throwable $t) { /* ignore */ }
+            try {
+                $request->user()->currentAccessToken()->delete();
+            } catch (\Throwable $t) { /* ignore */
+            }
 
             return response()->json(['message' => 'Compte supprimé avec succès']);
         } catch (\Exception $e) {
-            \Log::error('Error deleting own account: ' . $e->getMessage(), [ 'user_id' => auth()->id() ]);
+            \Log::error('Error deleting own account: ' . $e->getMessage(), ['user_id' => auth()->id()]);
             return response()->json(['error' => 'Échec de la suppression du compte'], 500);
         }
     }
@@ -852,7 +925,7 @@ class UserController extends Controller
         $user = User::with([
             'role',
             'medecinProfile',
-            'kineProfile', 
+            'kineProfile',
             'orthophonisteProfile',
             'psychologueProfile',
             'cliniqueProfile',
@@ -861,11 +934,11 @@ class UserController extends Controller
             'laboAnalyseProfile',
             'centreRadiologieProfile'
         ])->find($id);
-        
+
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
         }
-        
+
         // Build response with complete profile data
         $response = [
             'id' => $user->id,
@@ -878,7 +951,7 @@ class UserController extends Controller
             'is_verified' => $user->is_verified,
             'created_at' => $user->created_at
         ];
-        
+
         // Add professional profile data if exists
         if ($user->medecinProfile) {
             $response['medecinProfile'] = $user->medecinProfile;
@@ -892,7 +965,7 @@ class UserController extends Controller
         if ($user->psychologueProfile) {
             $response['psychologueProfile'] = $user->psychologueProfile;
         }
-        
+
         // Add organization profile data if exists
         if ($user->cliniqueProfile) {
             $response['cliniqueProfile'] = $user->cliniqueProfile;
@@ -909,7 +982,7 @@ class UserController extends Controller
         if ($user->centreRadiologieProfile) {
             $response['centreRadiologieProfile'] = $user->centreRadiologieProfile;
         }
-        
+
         return response()->json($response);
     }
 }
