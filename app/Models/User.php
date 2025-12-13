@@ -148,10 +148,18 @@ class User extends Authenticatable
 
     /**
      * Get family members (for family plan users)
+     * Goes through the user's subscription
      */
     public function familyMembers()
     {
-        return $this->hasMany(FamilyMember::class, 'primary_user_id');
+        return $this->hasManyThrough(
+            FamilyMember::class,
+            Subscription::class,
+            'user_id',         // subscriptions.user_id
+            'subscription_id', // family_members.subscription_id
+            'id',              // users.id
+            'id'               // subscriptions.id
+        );
     }
 
     /**

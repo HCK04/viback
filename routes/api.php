@@ -164,6 +164,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/appointments', [AppointmentController::class, 'index']);
     });
 
+    // Family Members routes (for family plan subscribers)
+    Route::prefix('family-members')->group(function () {
+        Route::get('/', [\App\Http\Controllers\FamilyMemberController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\FamilyMemberController::class, 'store']);
+        Route::get('/count', [\App\Http\Controllers\FamilyMemberController::class, 'count']);
+        Route::get('/{id}', [\App\Http\Controllers\FamilyMemberController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\FamilyMemberController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\FamilyMemberController::class, 'destroy']);
+    });
+
     // Patient Santé routes (authenticated, patients only)
     Route::prefix('patient/sante')->group(function () {
         Route::get('/', [\App\Http\Controllers\PatientSanteController::class, 'index']);

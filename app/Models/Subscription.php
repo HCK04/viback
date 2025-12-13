@@ -43,6 +43,14 @@ class Subscription extends Model
     }
 
     /**
+     * Get the family members for this subscription
+     */
+    public function familyMembers()
+    {
+        return $this->hasMany(FamilyMember::class);
+    }
+
+    /**
      * Check if subscription is active
      */
     public function isActive()
