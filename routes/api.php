@@ -156,6 +156,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/annonces/{id}', [AnnonceController::class, 'update']);
         Route::put('/annonces/{id}/toggle-status', [AnnonceController::class, 'toggleStatus']);
         Route::delete('/annonces/{id}', [AnnonceController::class, 'destroy']);
+
+        // QR Code scan verification
+        Route::post('/appointments/{id}/scan-verify', [DashboardController::class, 'scanVerify']);
+        Route::post('/appointments/{id}/check-in', [DashboardController::class, 'markCheckedIn']);
     });
 
     // Patient routes
